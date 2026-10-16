@@ -34,7 +34,7 @@ jobs:
       - uses: ilammy/msvc-dev-cmd@v1
       - name: Build native bridge test fixture
         shell: cmd
-        run: cl /LD /W4 test/native/core_fixture.c /Fe:test/native/core_fixture.dll
+        run: cl /std:c11 /LD /W4 test/native/core_fixture.c /Fe:test/native/core_fixture.dll
       - name: Test
         run: flutter test
       - name: Build Windows x64
