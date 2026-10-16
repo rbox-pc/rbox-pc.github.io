@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'libretro_core.dart';
 import 'windows_gamepads.dart';
+import 'windows_audio.dart';
 
 class LibretroPlayer extends StatefulWidget {
   const LibretroPlayer({super.key, required this.title, required this.romPath, required this.system});
@@ -16,6 +17,7 @@ class LibretroPlayer extends StatefulWidget {
 
 class _LibretroPlayerState extends State<LibretroPlayer> {
   LibretroCore? _core;
+  WindowsAudio? _audio;
   Timer? _timer;
   Timer? _saveTimer;
   ui.Image? _image;
@@ -60,14 +62,17 @@ class _LibretroPlayerState extends State<LibretroPlayer> {
         systemDirectory: '$root${Platform.pathSeparator}bios',
         saveDirectory: '$root${Platform.pathSeparator}saves${Platform.pathSeparator}${widget.system}');
       _core = core;
+      try { _audio = WindowsAudio(core.sampleRate.round()); }
+      catch (e) { _notice('Audio unavailable: $e'); }
       _saveTimer = Timer.periodic(const Duration(seconds: 30), (_) {
         try { core.saveSram(); } catch (e) { _notice('Save failed: $e'); }
       });
-      _timer = Timer.periodic(const Duration(milliseconds: 17), (_) {
+      _timer = Timer.periodic(Duration(microseconds: (1000000 / core.fps).round()), (_) {
         if (!mounted || _decoding) return;
         try {
           core.gamepads = _focus.hasFocus ? _gamepads.poll() : List.filled(4, 0);
           core.runFrame();
+          _audio?.push(core.takeAudio());
           final pixels = core.latestFrame;
           if (pixels == null) return;
           _decoding = true;
@@ -122,7 +127,7 @@ class _LibretroPlayerState extends State<LibretroPlayer> {
         Expanded(child: Center(child: _image == null
           ? const CircularProgressIndicator()
           : RawImage(image: _image, filterQuality: FilterQuality.none, fit: BoxFit.contain))),
-        Text('${widget.system} · Arrows: move · Z/X/A/S/Q/W: buttons · Enter: Start · Right Shift: Select · audio pending', style: const TextStyle(fontSize: 11)),
+        Text('${widget.system} · Arrows: move · Z/X/A/S/Q/W: buttons · Enter: Start · Right Shift: Select · XInput gamepads supported', style: const TextStyle(fontSize: 11)),
         const SizedBox(height: 12),
         Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
           Column(children: [
@@ -152,6 +157,7 @@ class _LibretroPlayerState extends State<LibretroPlayer> {
     _focus.dispose();
     _gamepads.dispose();
     _core?.dispose();
+    _audio?.dispose();
     _image?.dispose();
     super.dispose();
   }

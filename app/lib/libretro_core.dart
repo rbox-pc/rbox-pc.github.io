@@ -23,6 +23,29 @@ final class RetroGameInfo extends Struct {
   external Pointer<Utf8> meta;
 }
 
+final class RetroGeometry extends Struct {
+  @Uint32()
+  external int baseWidth;
+  @Uint32()
+  external int baseHeight;
+  @Uint32()
+  external int maxWidth;
+  @Uint32()
+  external int maxHeight;
+  @Float()
+  external double aspectRatio;
+}
+final class RetroTiming extends Struct {
+  @Double()
+  external double fps;
+  @Double()
+  external double sampleRate;
+}
+final class RetroAvInfo extends Struct {
+  external RetroGeometry geometry;
+  external RetroTiming timing;
+}
+
 // Libretro video output callback: data, width, height, pitch (bytes).
 typedef _VideoNative = Void Function(Pointer<Void>, Uint32, Uint32, Size);
 typedef _AudioNative = Void Function(Int16, Int16);
@@ -44,6 +67,7 @@ class LibretroCore {
     _load = _dll.lookupFunction<Uint8 Function(Pointer<RetroGameInfo>), int Function(Pointer<RetroGameInfo>)>('retro_load_game');
     _unload = _dll.lookupFunction<Void Function(), void Function()>('retro_unload_game');
     _getInfo = _dll.lookupFunction<Void Function(Pointer<RetroSystemInfo>), void Function(Pointer<RetroSystemInfo>)>('retro_get_system_info');
+    _getAvInfo = _dll.lookupFunction<Void Function(Pointer<RetroAvInfo>), void Function(Pointer<RetroAvInfo>)>('retro_get_system_av_info');
     _getMemoryData = _dll.lookupFunction<Pointer<Void> Function(Uint32), Pointer<Void> Function(int)>('retro_get_memory_data');
     _getMemorySize = _dll.lookupFunction<Size Function(Uint32), int Function(int)>('retro_get_memory_size');
     _serializeSize = _dll.lookupFunction<Size Function(), int Function()>('retro_serialize_size');
@@ -62,6 +86,9 @@ class LibretroCore {
   late final void Function() _init, _deinit, _unload, _run;
   late final int Function(Pointer<RetroGameInfo>) _load;
   late final void Function(Pointer<RetroSystemInfo>) _getInfo;
+  late final void Function(Pointer<RetroAvInfo>) _getAvInfo;
+  double fps = 60, sampleRate = 44100;
+  final _audioSamples = <int>[];
   late final Pointer<Void> Function(int) _getMemoryData;
   late final int Function(int) _getMemorySize;
   late final int Function() _serializeSize;
@@ -165,8 +192,25 @@ class LibretroCore {
     core.frameHeight = height;
   }
 
-  static void _audio(int left, int right) {} // Audio output is next milestone.
-  static int _audioBatch(Pointer<Int16> samples, int frames) => frames;
+  static void _audio(int left, int right) {
+    final core = _active;
+    if (core != null && core._audioSamples.length < 32768) {
+      core._audioSamples.add(left); core._audioSamples.add(right);
+    }
+  }
+  static int _audioBatch(Pointer<Int16> samples, int frames) {
+    final core = _active;
+    if (core != null && samples != nullptr && frames > 0 && frames <= 16384 && core._audioSamples.length + frames * 2 <= 32768) {
+      core._audioSamples.addAll(samples.asTypedList(frames * 2));
+    }
+    return frames;
+  }
+
+  Int16List takeAudio() {
+    final samples = Int16List.fromList(_audioSamples);
+    _audioSamples.clear();
+    return samples;
+  }
   static void _poll() {}
   static int _input(int port, int device, int index, int id) {
     final core = _active;
@@ -214,6 +258,13 @@ class LibretroCore {
         if (_load(info) == 0) throw StateError('Libretro core rejected this ROM.');
         _loaded = true;
         _restoreSram();
+        final av = calloc<RetroAvInfo>();
+        try {
+          _getAvInfo(av);
+          final timing = av.ref.timing;
+          if (timing.fps.isFinite && timing.fps >= 10 && timing.fps <= 240) fps = timing.fps;
+          if (timing.sampleRate.isFinite && timing.sampleRate >= 8000 && timing.sampleRate <= 192000) sampleRate = timing.sampleRate;
+        } finally { calloc.free(av); }
       } finally {
         // Only the temporary retro_game_info struct can be freed here.
         // ROM buffer and path stay alive until retro_unload_game.

@@ -7,6 +7,9 @@ Implemented, pending Windows CI and gameplay verification:
 - Four XInput-compatible USB/Bluetooth controllers; independent player ports.
 - SRAM restoration, periodic SRAM flush (30 seconds) and flush when closing a game.
 - Save/load state buttons; invalid or rejected states report an error.
+- Bounded WinMM stereo audio buffers using the sample rate reported by each core.
+- Frame timer uses the FPS reported by each core.
+- BIOS ZIP/bin/rom import into the BIOS directory, without indexing BIOS as games.
 - BIOS and save directory callbacks with retained native string pointers.
 - Replaced stale counter test; added controller mapping/dead-zone tests.
 
@@ -19,7 +22,7 @@ Arcade: fbneo_libretro.dll. Commercial distribution licenses require review.
 Data remains in Documents/RetroBoxLibrary. BIOS goes in bios, saves in saves/<system>.
 Do not replace core versions without backing up states; states can be core-version-specific.
 
-Still pending: audio output, DirectInput-only gamepads, cheat execution, BIOS ZIP import,
+Still pending: DirectInput-only gamepads, cheat execution,
 Turbify device licensing and Microsoft Store billing/MSIX packaging.
 Business rules: 4 plans (monthly/annual, with/without promo); 7-day trial
 via Turbify with valid promo; no trial without promo; no 30-day trial.

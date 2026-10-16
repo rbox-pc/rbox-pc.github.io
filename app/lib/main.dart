@@ -155,16 +155,17 @@ class _RetroBoxHomeState extends State<RetroBoxHome> {
         final isCover = ['png', 'jpg', 'jpeg', 'webp'].contains(ext);
         final isCheat = ['cht', 'ini', 'xml', 'json'].contains(ext) && (lower.contains('cheat') || ext == 'cht');
         final system = _systemFor(original);
-        final isRom = system != null && _systems[system]!.extensions.contains(ext);
-        if (!isCover && !isCheat && !isRom) { skipped++; continue; }
+        final isBios = lower.split('/').contains('bios') && ['bin', 'rom', 'zip'].contains(ext);
+        final isRom = !isBios && system != null && _systems[system]!.extensions.contains(ext);
+        if (!isCover && !isCheat && !isRom && !isBios) { skipped++; continue; }
         extractedBytes += item.size;
         if (extractedBytes > 1024 * 1024 * 1024) throw const FormatException('Extracted content exceeds 1 GB demo limit');
         final data = item.readBytes();
         if (data == null) { skipped++; continue; }
         // Use a stable, sanitized destination name; never trust paths from inside the ZIP.
         final safeName = original.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
-        final folder = isRom ? 'roms' : isCover ? 'covers' : 'cheats';
-        final destination = File('${root.path}${Platform.pathSeparator}$folder${Platform.pathSeparator}$safeName');
+        final folder = isBios ? 'bios' : isRom ? 'roms' : isCover ? 'covers' : 'cheats';
+        final destination = File('${root.path}${Platform.pathSeparator}$folder${Platform.pathSeparator}${isBios ? _baseName(original) : safeName}');
         await destination.parent.create(recursive: true);
         await destination.writeAsBytes(data, flush: true);
         files[original.toLowerCase()] = destination.path;
@@ -181,7 +182,7 @@ class _RetroBoxHomeState extends State<RetroBoxHome> {
         final ext = _extension(name);
         if (['png', 'jpg', 'jpeg', 'webp'].contains(ext)) {
           coverLookup['${_systemFor(entry.key) ?? ''}|${_stem(name)}'] = entry.value; // e.g. Game.nes
-        } else if (['cht', 'ini', 'xml', 'json'].contains(ext) && entry.key.contains('cheat')) {
+        } else if (['cht', 'ini', 'xml', 'json'].contains(ext) && (entry.key.contains('cheat') || ext == 'cht')) {
           cheatLookup['${_systemFor(entry.key) ?? ''}|${_stem(name)}'] = entry.value;
         }
       }
