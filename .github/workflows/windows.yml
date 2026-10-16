@@ -1,0 +1,48 @@
+name: RetroBox Windows
+on:
+  push:
+    branches: [windows-native]
+    paths: ['app/**', '.github/workflows/windows.yml']
+  pull_request:
+    paths: ['app/**', '.github/workflows/windows.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: SDK versions
+        run: flutter --version
+      - name: Resolve dependencies
+        run: flutter pub get
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+      - name: Test
+        run: flutter test
+      - name: Build Windows x64
+        run: flutter build windows --release
+      - name: Include core setup notes
+        shell: pwsh
+        run: |
+          $release = "build/windows/x64/runner/Release"
+          New-Item -ItemType Directory -Force "$release/emulator"
+          Copy-Item WINDOWS_PROGRESS.md "$release/README-PROTOTYPE.md"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RetroBox-Windows-x64-prototype
+          path: app/build/windows/x64/runner/Release/
+          if-no-files-found: error
+          retention-days: 14
