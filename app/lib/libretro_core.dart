@@ -44,6 +44,11 @@ class LibretroCore {
     _load = _dll.lookupFunction<Uint8 Function(Pointer<RetroGameInfo>), int Function(Pointer<RetroGameInfo>)>('retro_load_game');
     _unload = _dll.lookupFunction<Void Function(), void Function()>('retro_unload_game');
     _getInfo = _dll.lookupFunction<Void Function(Pointer<RetroSystemInfo>), void Function(Pointer<RetroSystemInfo>)>('retro_get_system_info');
+    _getMemoryData = _dll.lookupFunction<Pointer<Void> Function(Uint32), Pointer<Void> Function(int)>('retro_get_memory_data');
+    _getMemorySize = _dll.lookupFunction<Size Function(Uint32), int Function(int)>('retro_get_memory_size');
+    _serializeSize = _dll.lookupFunction<Size Function(), int Function()>('retro_serialize_size');
+    _serialize = _dll.lookupFunction<Uint8 Function(Pointer<Void>, Size), int Function(Pointer<Void>, int)>('retro_serialize');
+    _unserialize = _dll.lookupFunction<Uint8 Function(Pointer<Void>, Size), int Function(Pointer<Void>, int)>('retro_unserialize');
     _run = _dll.lookupFunction<Void Function(), void Function()>('retro_run');
   }
 
@@ -57,12 +62,19 @@ class LibretroCore {
   late final void Function() _init, _deinit, _unload, _run;
   late final int Function(Pointer<RetroGameInfo>) _load;
   late final void Function(Pointer<RetroSystemInfo>) _getInfo;
+  late final Pointer<Void> Function(int) _getMemoryData;
+  late final int Function(int) _getMemorySize;
+  late final int Function() _serializeSize;
+  late final int Function(Pointer<Void>, int) _serialize, _unserialize;
+  Pointer<Utf8> _systemDirectory = nullptr, _saveDirectory = nullptr;
+  String? _saveBase;
   // Libretro may retain retro_game_info ROM pointers until retro_unload_game.
   Pointer<Uint8> _romData = nullptr;
   Pointer<Utf8> _romPath = nullptr;
   bool _loaded = false;
   bool _initialized = false;
   int buttons = 0;
+  List<int> gamepads = List.filled(4, 0);
   Uint8List? latestFrame;
   int frameWidth = 0, frameHeight = 0;
   int _pixelFormat = 0; // 0 = XRGB1555, 1 = XRGB8888, 2 = RGB565
@@ -96,6 +108,14 @@ class LibretroCore {
     switch (cmd & 0xffff) {
       case 3: // GET_CAN_DUPE
         if (data != nullptr) data.cast<Uint8>().value = 1;
+        return 1;
+      case 9: // GET_SYSTEM_DIRECTORY: retained until deinit.
+        if (data == nullptr || core._systemDirectory == nullptr) return 0;
+        data.cast<Pointer<Utf8>>().value = core._systemDirectory;
+        return 1;
+      case 31: // GET_SAVE_DIRECTORY
+        if (data == nullptr || core._saveDirectory == nullptr) return 0;
+        data.cast<Pointer<Utf8>>().value = core._saveDirectory;
         return 1;
       case 10: // SET_PIXEL_FORMAT
         if (data == nullptr) return 0;
@@ -150,15 +170,21 @@ class LibretroCore {
   static void _poll() {}
   static int _input(int port, int device, int index, int id) {
     final core = _active;
-    if (core == null || port != 0 || device != 1 || id >= 16) return 0;
-    return (core.buttons & (1 << id)) != 0 ? 1 : 0;
+    if (core == null || port >= 4 || (device & 0xff) != 1 || id >= 16) return 0;
+    final mask = core.gamepads[port] | (port == 0 ? core.buttons : 0);
+    return (mask & (1 << id)) != 0 ? 1 : 0;
   }
 
-  void load(String romPath) {
+  void load(String romPath, {required String systemDirectory, required String saveDirectory}) {
     if (_active != null) throw StateError('Another Libretro session is active.');
     if (!File(romPath).existsSync()) throw FileSystemException('ROM not found', romPath);
     _active = this;
     try {
+      Directory(systemDirectory).createSync(recursive: true);
+      Directory(saveDirectory).createSync(recursive: true);
+      _systemDirectory = systemDirectory.toNativeUtf8();
+      _saveDirectory = saveDirectory.toNativeUtf8();
+      _saveBase = '$saveDirectory${Platform.pathSeparator}${File(romPath).uri.pathSegments.last}';
       _setEnvironment(Pointer.fromFunction<_EnvironmentNative>(_environment, 0));
       _setVideo(Pointer.fromFunction<_VideoNative>(_video));
       _setAudio(Pointer.fromFunction<_AudioNative>(_audio));
@@ -187,6 +213,7 @@ class LibretroCore {
         info.ref.meta = nullptr;
         if (_load(info) == 0) throw StateError('Libretro core rejected this ROM.');
         _loaded = true;
+        _restoreSram();
       } finally {
         // Only the temporary retro_game_info struct can be freed here.
         // ROM buffer and path stay alive until retro_unload_game.
@@ -202,11 +229,66 @@ class LibretroCore {
     if (_loaded) _run();
   }
 
+  void _restoreSram() {
+    final file = File('$_saveBase.srm');
+    if (!file.existsSync()) return;
+    final size = _getMemorySize(0);
+    final memory = _getMemoryData(0);
+    final bytes = file.readAsBytesSync();
+    if (size > 0 && memory != nullptr && bytes.length == size) {
+      memory.cast<Uint8>().asTypedList(size).setAll(0, bytes);
+    }
+  }
+
+  void saveSram() {
+    if (!_loaded) return;
+    final size = _getMemorySize(0);
+    final memory = _getMemoryData(0);
+    if (size > 0 && size <= 64 * 1024 * 1024 && memory != nullptr) {
+      _writeSave(File('$_saveBase.srm'), memory.cast<Uint8>().asTypedList(size));
+    }
+  }
+
+  void _writeSave(File file, List<int> bytes) {
+    final temporary = File('${file.path}.tmp');
+    temporary.writeAsBytesSync(bytes, flush: true);
+    temporary.renameSync(file.path);
+  }
+
+  void saveState() {
+    if (!_loaded) throw StateError('No game running');
+    final size = _serializeSize();
+    if (size <= 0 || size > 64 * 1024 * 1024) throw StateError('This core does not support a valid save state');
+    final buffer = calloc<Uint8>(size);
+    try {
+      if (_serialize(buffer.cast<Void>(), size) == 0) throw StateError('Core could not save this state');
+      _writeSave(File('$_saveBase.state'), buffer.asTypedList(size));
+    } finally { calloc.free(buffer); }
+    saveSram();
+  }
+
+  void loadState() {
+    if (!_loaded) throw StateError('No game running');
+    final file = File('$_saveBase.state');
+    if (!file.existsSync()) throw StateError('No saved state for this game');
+    final size = file.lengthSync();
+    if (size <= 0 || size > 64 * 1024 * 1024) throw StateError('Invalid state file');
+    final bytes = file.readAsBytesSync();
+    final buffer = calloc<Uint8>(size);
+    try {
+      buffer.asTypedList(size).setAll(0, bytes);
+      if (_unserialize(buffer.cast<Void>(), size) == 0) throw StateError('Core rejected state; use the same core version');
+    } finally { calloc.free(buffer); }
+  }
+
   void dispose() {
+    try { saveSram(); } catch (e) { stderr.writeln('Could not save SRAM: $e'); }
     if (_loaded) { _unload(); _loaded = false; }
     if (_initialized) { _deinit(); _initialized = false; }
     if (_romData != nullptr) { calloc.free(_romData); _romData = nullptr; }
     if (_romPath != nullptr) { calloc.free(_romPath); _romPath = nullptr; }
+    if (_systemDirectory != nullptr) { calloc.free(_systemDirectory); _systemDirectory = nullptr; }
+    if (_saveDirectory != nullptr) { calloc.free(_saveDirectory); _saveDirectory = nullptr; }
     if (identical(_active, this)) _active = null;
   }
 }

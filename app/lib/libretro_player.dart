@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:ui' as ui;
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'libretro_core.dart';
+import 'windows_gamepads.dart';
 
 class LibretroPlayer extends StatefulWidget {
   const LibretroPlayer({super.key, required this.title, required this.romPath, required this.system});
@@ -14,11 +17,13 @@ class LibretroPlayer extends StatefulWidget {
 class _LibretroPlayerState extends State<LibretroPlayer> {
   LibretroCore? _core;
   Timer? _timer;
+  Timer? _saveTimer;
   ui.Image? _image;
   bool _decoding = false;
   String? _error;
   final _focus = FocusNode();
-  static const _keys = <LogicalKeyboardKey, int>{
+  final _gamepads = WindowsGamepads();
+  static final _keys = <LogicalKeyboardKey, int>{
     LogicalKeyboardKey.arrowUp: 4, LogicalKeyboardKey.arrowDown: 5,
     LogicalKeyboardKey.arrowLeft: 6, LogicalKeyboardKey.arrowRight: 7,
     LogicalKeyboardKey.keyZ: 0, LogicalKeyboardKey.keyX: 8,
@@ -45,14 +50,23 @@ class _LibretroPlayerState extends State<LibretroPlayer> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _start());
   }
 
-  void _start() {
+  Future<void> _start() async {
     try {
       final core = LibretroCore.open(widget.system);
-      core.load(widget.romPath);
+      final documents = await getApplicationDocumentsDirectory();
+      if (!mounted) return;
+      final root = '${documents.path}${Platform.pathSeparator}RetroBoxLibrary';
+      core.load(widget.romPath,
+        systemDirectory: '$root${Platform.pathSeparator}bios',
+        saveDirectory: '$root${Platform.pathSeparator}saves${Platform.pathSeparator}${widget.system}');
       _core = core;
+      _saveTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+        try { core.saveSram(); } catch (e) { _notice('Save failed: $e'); }
+      });
       _timer = Timer.periodic(const Duration(milliseconds: 17), (_) {
         if (!mounted || _decoding) return;
         try {
+          core.gamepads = _focus.hasFocus ? _gamepads.poll() : List.filled(4, 0);
           core.runFrame();
           final pixels = core.latestFrame;
           if (pixels == null) return;
@@ -73,6 +87,18 @@ class _LibretroPlayerState extends State<LibretroPlayer> {
     }
   }
 
+  void _notice(String message) {
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _stateAction(bool save) {
+    if (_core == null) return;
+    try {
+      if (save) { _core!.saveState(); } else { _core!.loadState(); }
+      _notice(save ? 'Game state saved' : 'Game state restored');
+    } catch (e) { _notice('$e'); }
+  }
+
   Widget _button(String label, int id) => Listener(
     onPointerDown: (_) => _core?.buttons |= (1 << id),
     onPointerUp: (_) => _core?.buttons &= ~(1 << id),
@@ -84,7 +110,10 @@ class _LibretroPlayerState extends State<LibretroPlayer> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text(widget.title)),
+    appBar: AppBar(title: Text(widget.title), actions: [
+      IconButton(tooltip: 'Save state', onPressed: () => _stateAction(true), icon: const Icon(Icons.save)),
+      IconButton(tooltip: 'Load state', onPressed: () => _stateAction(false), icon: const Icon(Icons.restore)),
+    ]),
     body: _error != null ? Center(child: SelectableText('${widget.system} startup error:\n$_error')) :
       Focus(
         focusNode: _focus, autofocus: true, onKeyEvent: _onKey,
@@ -119,7 +148,9 @@ class _LibretroPlayerState extends State<LibretroPlayer> {
   @override
   void dispose() {
     _timer?.cancel();
+    _saveTimer?.cancel();
     _focus.dispose();
+    _gamepads.dispose();
     _core?.dispose();
     _image?.dispose();
     super.dispose();
