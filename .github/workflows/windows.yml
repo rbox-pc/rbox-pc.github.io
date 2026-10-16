@@ -31,6 +31,10 @@ jobs:
         run: flutter pub get
       - name: Analyze
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Build native bridge test fixture
+        shell: cmd
+        run: cl /LD /W4 test/native/core_fixture.c /Fe:test/native/core_fixture.dll
       - name: Test
         run: flutter test
       - name: Build Windows x64

@@ -115,6 +115,12 @@ class LibretroCore {
     'Arcade': 'fbneo_libretro.dll',
   };
 
+  /// Load an explicitly selected Windows Libretro DLL.
+  static LibretroCore fromPath(String path) {
+    if (!Platform.isWindows) throw UnsupportedError('Windows core required');
+    return LibretroCore._(DynamicLibrary.open(File(path).absolute.path));
+  }
+
   static LibretroCore open(String system) {
     if (!Platform.isWindows) throw UnsupportedError('This prototype requires Windows.');
     final dllName = dllNames[system];
