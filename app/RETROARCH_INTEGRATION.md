@@ -6,7 +6,7 @@ Solo NES/Contra en el RetroArch original ha sido confirmado por Roberto; esta in
 ## Uso
 Extraer TODO el ZIP y abrir retrobox.exe. Importar un juego (ROM suelta) o un ZIP de biblioteca.
 Abrir consola y tocar juego: RetroBox selecciona su core automáticamente.
-Esc, o Start + Select, cierra el motor limpiamente y devuelve la biblioteca.
+Esc, o Select + abajo, cierra el motor limpiamente y devuelve la biblioteca.
 F2 guarda estado y F4 carga estado. F1 abre el menú avanzado.
 El motor conserva su propia ventana de juego; la biblioteca permanece abierta detrás.
 Motores e imagen permite importar DLL de cores x64 por consola y elegir suavizado.

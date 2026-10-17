@@ -116,7 +116,7 @@ class _RetroArchPlayerState extends State<RetroArchPlayer> {
         'input_joypad_driver': '"sdl2"',
         'input_autodetect_enable': 'true',
         'input_exit_emulator': '"escape"',
-        'input_quit_gamepad_combo': '4',
+        'input_quit_gamepad_combo': '9',
         'quit_press_twice': 'false',
         'stdin_cmd_enable': 'true',
         'network_cmd_enable': 'false',
@@ -141,7 +141,7 @@ class _RetroArchPlayerState extends State<RetroArchPlayer> {
       _process = process;
       final output = process.stdout.listen(log.add).asFuture<void>();
       final errors = process.stderr.listen(log.add).asFuture<void>();
-      if (mounted) setState(() { _running = true; _starting = false; _status = 'Jugando. Esc o Start + Select para volver.'; });
+      if (mounted) setState(() { _running = true; _starting = false; _status = 'Jugando. Esc o Select + abajo para volver.'; });
       final code = await process.exitCode;
       await output;
       await errors;
@@ -184,7 +184,7 @@ class _RetroArchPlayerState extends State<RetroArchPlayer> {
             const SizedBox(height: 20),
             Text(_status, textAlign: TextAlign.center),
             const SizedBox(height: 20),
-            const Text('Salir: Esc · Mando: Start + Select\nGuardar estado: F2 · Cargar estado: F4\nMenú avanzado: F1', textAlign: TextAlign.center),
+            const Text('Salir: Esc · Mando: Select + abajo\nGuardar estado: F2 · Cargar estado: F4\nMenú avanzado: F1', textAlign: TextAlign.center),
             SwitchListTile(title: const Text('Suavizar imagen'), subtitle: const Text('Se aplica al iniciar la siguiente partida.'), value: _smooth,
               onChanged: _running || _starting ? null : (value) => setState(() => _smooth = value)),
             if (_running) FilledButton.icon(onPressed: _quit, icon: const Icon(Icons.home), label: const Text('Volver a la biblioteca')),
