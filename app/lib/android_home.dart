@@ -36,7 +36,7 @@ extension AndroidHome on _RetroBoxHomeState {
   String tr(String en, String es) => _spanish ? es : en;
   List<GameEntry> get currentGames => _games.where((game) => game.system == _systems.keys.elementAt(_current)).toList();
 
-  void _changeSystem(int index) => setState(() { _current = index; _selected = 0; });
+  void _changeSystem(int index) => _refresh(() { _current = index; _selected = 0; });
 
   Future<void> _play(GameEntry game) async {
     MenuMusic.stop();
@@ -123,7 +123,7 @@ extension AndroidHome on _RetroBoxHomeState {
     ));
     input.dispose();
     if (url == null || url.isEmpty) return;
-    setState(() { _busy = true; _message = tr('Downloading…', 'Descargando…'); });
+    _refresh(() { _busy = true; _message = tr('Downloading…', 'Descargando…'); });
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 30);
     try {
       var uri = Uri.parse(url.contains('://') ? url : 'https://$url');
@@ -137,11 +137,11 @@ extension AndroidHome on _RetroBoxHomeState {
           received += bytes.length;
           if (received > 500 * 1024 * 1024) throw const FormatException('Máximo 500 MB');
           content.add(bytes);
-          if (mounted) setState(() => _message = '${tr('Downloading','Descargando')}: ${response.contentLength > 0 ? '${(received * 100 / response.contentLength).floor()}%' : '${received ~/ 1024} KB'}');
+          if (mounted) _refresh(() => _message = '${tr('Downloading','Descargando')}: ${response.contentLength > 0 ? '${(received * 100 / response.contentLength).floor()}%' : '${received ~/ 1024} KB'}');
         }
         final bytes = content.takeBytes();
         if (bytes.length >= 4 && bytes[0] == 0x50 && bytes[1] == 0x4b) {
-          if (mounted) setState(() => _busy = false);
+          if (mounted) _refresh(() => _busy = false);
           await _importZip(bytes);
           return;
         }
@@ -152,8 +152,8 @@ extension AndroidHome on _RetroBoxHomeState {
       }
       throw const FormatException('Demasiadas páginas intermedias');
     } catch (error) {
-      if (mounted) setState(() => _message = '${tr('Import failed','No se pudo importar')}: $error');
-    } finally { client.close(force: true); if (mounted) setState(() => _busy = false); }
+      if (mounted) _refresh(() => _message = '${tr('Import failed','No se pudo importar')}: $error');
+    } finally { client.close(force: true); if (mounted) _refresh(() => _busy = false); }
   }
 
   void _pad(PadEvent event) {
@@ -165,19 +165,19 @@ extension AndroidHome on _RetroBoxHomeState {
       if ([0,6].contains(event.button) && focus?.context != null) Actions.maybeInvoke(focus!.context!, const ActivateIntent());
       return;
     }
-    if (event.button == 11) { setState(() => _inGames = false); return; }
-    if (event.button == 12) { setState(() => _inGames = true); return; }
+    if (event.button == 11) { _refresh(() => _inGames = false); return; }
+    if (event.button == 12) { _refresh(() => _inGames = true); return; }
     if ([13,14].contains(event.button)) {
       final direction = event.button == 13 ? -1 : 1;
       if (!_inGames) { _changeSystem((_current + direction).clamp(0,4)); }
       else if (currentGames.isNotEmpty) {
-        setState(() => _selected = (_selected + direction).clamp(0,currentGames.length-1));
+        _refresh(() => _selected = (_selected + direction).clamp(0,currentGames.length-1));
         if (_carousel.hasClients) _carousel.animateTo((_selected * 196.0).clamp(0,_carousel.position.maxScrollExtent), duration: const Duration(milliseconds: 160), curve: Curves.easeOut);
       }
     }
     if ([0,6].contains(event.button) && !_busy && currentGames.isNotEmpty) {
       if (_inGames) { _play(currentGames[_selected.clamp(0,currentGames.length-1)]); }
-      else { setState(() => _inGames = true); }
+      else { _refresh(() => _inGames = true); }
     }
   }
 
@@ -233,7 +233,7 @@ extension AndroidHome on _RetroBoxHomeState {
             return ListView.separated(controller: _carousel, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8), scrollDirection: Axis.horizontal,
               itemCount: games.length, separatorBuilder: (_, __) => const SizedBox(width: 16),
               itemBuilder: (context,index) => Center(child: SizedBox(width: width, height: height, child: RetroButton(
-                selected: _inGames && _selected == index, onFocus: () => setState(() { _selected = index; _inGames = true; }),
+                selected: _inGames && _selected == index, onFocus: () => _refresh(() { _selected = index; _inGames = true; }),
                 onPressed: () => _play(games[index]),
                 child: Column(children: [Expanded(child: _cover(games[index])), const SizedBox(height: 3), SizedBox(height: 48, child: Center(child: Text(games[index].title, maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold))))]),
               ))),

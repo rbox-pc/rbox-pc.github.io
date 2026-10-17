@@ -105,6 +105,8 @@ jobs:
           '@ | Set-Content validate.py
           python validate.py
           if ($LASTEXITCODE) { throw 'Native core validation failed' }
+      - name: Verify real engine loading, save and clean exit
+        run: python app/test/retroarch_process_smoke.py app/build/windows/x64/runner/Release/engine/retroarch.exe
       - name: Report complete package size
         shell: pwsh
         run: |

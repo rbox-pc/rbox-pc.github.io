@@ -87,6 +87,8 @@ class _RetroBoxHomeState extends State<RetroBoxHome> {
     _padEvents = WindowsControls.instance.events.stream.listen(_pad);
   }
 
+  void _refresh(VoidCallback action) { if (mounted) setState(action); }
+
   @override
   void dispose() {
     _padEvents?.cancel();
@@ -223,7 +225,7 @@ class _RetroBoxHomeState extends State<RetroBoxHome> {
           final settingsFile = File('${root.path}/engine.json');
           final settings = await settingsFile.exists() ? Map<String,dynamic>.from(jsonDecode(await settingsFile.readAsString()) as Map) : <String,dynamic>{};
           final cores = Map<String,dynamic>.from(settings['cores'] as Map? ?? {});
-          cores[coreSystem!] = destination.path; settings['cores'] = cores;
+          cores[coreSystem] = destination.path; settings['cores'] = cores;
           await settingsFile.writeAsString(jsonEncode(settings), flush: true);
         }
         files[original.toLowerCase()] = destination.path;

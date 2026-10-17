@@ -10,7 +10,7 @@ extension AndroidSettings on _RetroBoxHomeState {
   Future<void> _loadPreferences() async {
     final settings = await _preferences();
     if (!mounted) return;
-    setState(() { _spanish = settings['spanish'] as bool? ?? true; _music = settings['music'] as bool? ?? true; });
+    _refresh(() { _spanish = settings['spanish'] as bool? ?? true; _music = settings['music'] as bool? ?? true; });
     if (_music) MenuMusic.play();
   }
 
@@ -36,7 +36,7 @@ extension AndroidSettings on _RetroBoxHomeState {
     // The imported copy is removed; the original selected file stays on the user's drive.
     final file = File(game.romPath);
     if (file.absolute.path.startsWith('${root.absolute.path}${Platform.pathSeparator}') && await file.exists()) await file.delete();
-    if (mounted) setState(() { _games = updated; _selected = 0; });
+    if (mounted) _refresh(() { _games = updated; _selected = 0; });
   }
 
   Future<void> _manageSaves() async {
@@ -74,7 +74,7 @@ extension AndroidSettings on _RetroBoxHomeState {
     final cores = Map<String,dynamic>.from(settings['cores'] as Map? ?? {});
     cores[system] = destination.path; settings['cores'] = cores;
     await _writePreferences(settings);
-    if (mounted) setState(() => _message = '${tr('Core imported','Core importado')}: $system');
+    if (mounted) _refresh(() => _message = '${tr('Core imported','Core importado')}: $system');
   }
 
   Future<void> _androidSettings() async {
@@ -83,15 +83,15 @@ extension AndroidSettings on _RetroBoxHomeState {
     await showDialog<void>(context: context, builder: (context) => StatefulBuilder(builder: (context,update) => AlertDialog(
       title: Text(tr('SETTINGS','AJUSTES')),
       content: SizedBox(width: 600, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        ListTile(title: Text(tr('Language: English','Idioma: Español')), onTap: () async { setState(() => _spanish = !_spanish); update(() {}); final latest = await _preferences(); latest['spanish'] = _spanish; await _writePreferences(latest); }),
-        SwitchListTile(title: Text(tr('Music','Música')), value: _music, onChanged: (value) async { setState(() => _music = value); update(() {}); if (value) { MenuMusic.play(); } else { MenuMusic.stop(); } final latest = await _preferences(); latest['music'] = value; await _writePreferences(latest); }),
+        ListTile(title: Text(tr('Language: English','Idioma: Español')), onTap: () async { _refresh(() => _spanish = !_spanish); update(() {}); final latest = await _preferences(); latest['spanish'] = _spanish; await _writePreferences(latest); }),
+        SwitchListTile(title: Text(tr('Music','Música')), value: _music, onChanged: (value) async { _refresh(() => _music = value); update(() {}); if (value) { MenuMusic.play(); } else { MenuMusic.stop(); } final latest = await _preferences(); latest['music'] = value; await _writePreferences(latest); }),
         SwitchListTile(title: Text(tr('Smooth image','Suavizar imagen')), value: settings['smooth'] as bool? ?? true, onChanged: (value) async { update(() => settings['smooth'] = value); final latest = await _preferences(); latest['smooth'] = value; await _writePreferences(latest); }),
         ListTile(title: Text(tr('Controllers','Mandos')), subtitle: Text(tr('SDL2 automatic mapping · Select + Down: Exit menu · Start twice: Pause','Mapeo SDL2 automático · Select + abajo: Menú de salida · Start dos veces: Pausa'))),
         for (final system in _systems.keys) ListTile(title: Text('${tr('Import core','Importar core')}: $system'), onTap: () => _importWindowsCore(system)),
         ListTile(title: Text(tr('Delete Imported Games','Eliminar juegos importados')), onTap: () { Navigator.pop(context); _manageGames(); }),
         ListTile(title: Text(tr('Manage Game Saves','Administrar partidas guardadas')), onTap: () { Navigator.pop(context); _manageSaves(); }),
         ListTile(title: Text(tr('Clear ALL Game Saves','Borrar TODAS las partidas guardadas')), onTap: () { Navigator.pop(context); _clearSaves(); }),
-        ListTile(title: Text(tr('Reset RetroBox','Restablecer RetroBox')), onTap: () async { Navigator.pop(context); if (!await _confirm(tr('Reset RetroBox?','¿Restablecer RetroBox?'),tr('Delete imported games, settings and saves?','¿Eliminar juegos importados, ajustes y partidas?'))) return; final root = await _libraryDir(); await root.delete(recursive:true); if (mounted) setState(() { _games = []; _selected = 0; _current = 0; _message = null; }); await _loadPreferences(); }),
+        ListTile(title: Text(tr('Reset RetroBox','Restablecer RetroBox')), onTap: () async { Navigator.pop(context); if (!await _confirm(tr('Reset RetroBox?','¿Restablecer RetroBox?'),tr('Delete imported games, settings and saves?','¿Eliminar juegos importados, ajustes y partidas?'))) return; final root = await _libraryDir(); await root.delete(recursive:true); if (mounted) _refresh(() { _games = []; _selected = 0; _current = 0; _message = null; }); await _loadPreferences(); }),
       ]))),
       actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('← Back to Games','← Volver a los juegos')))],
     )));
