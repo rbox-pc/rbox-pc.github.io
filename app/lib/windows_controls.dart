@@ -14,12 +14,42 @@ class WindowsControls {
   final _controllers = <int, Pointer<Void>>{};
   final _previous = <int, Set<int>>{};
   final events = StreamController<PadEvent>.broadcast();
+  File? _diagnosticFile;
+  IOSink? _diagnosticSink;
+  DateTime? _diagnosticStart;
+
+  Future<void> _startDiagnostics() async {
+    try {
+      final documents = await getApplicationDocumentsDirectory();
+      final folder = Directory('${documents.path}/RetroBoxLibrary/logs');
+      await folder.create(recursive: true);
+      _diagnosticFile = File('${folder.path}/controller-diagnostic.log');
+      _diagnosticSink = _diagnosticFile!.openWrite(mode: FileMode.write);
+      _diagnosticStart = DateTime.now();
+      _diagnosticSink!.writeln('RetroBox Windows controller diagnostic W2');
+      _diagnosticSink!.writeln('Started: ${_diagnosticStart!.toIso8601String()}');
+      _diagnosticSink!.writeln('SDL buttons: 11=UP, 12=DOWN, 13=LEFT, 14=RIGHT, 0=A, 6=START');
+    } catch (_) { /* Diagnostics must never prevent RetroBox from starting. */ }
+  }
+
+  void _recordInput(int controller, int button, Set<int> down, int x, int y) {
+    final direction = switch (button) {
+      11 => 'UP', 12 => 'DOWN', 13 => 'LEFT', 14 => 'RIGHT',
+      0 => 'A', 1 => 'B', 6 => 'START', _ => 'BUTTON_$button',
+    };
+    _diagnosticSink?.writeln(
+      '${DateTime.now().toIso8601String()} controller=$controller '
+      'button=$button direction=$direction leftX=$x leftY=$y '
+      'pressed=${down.toList()..sort()}',
+    );
+  }
 
   void start() {
     if (!Platform.isWindows) return;
     try {
       final sdl = DynamicLibrary.open('${File(Platform.resolvedExecutable).parent.path}/SDL2.dll');
       _sdl = sdl;
+      unawaited(_startDiagnostics());
       final hint = sdl.lookupFunction<Int32 Function(Pointer<Utf8>, Pointer<Utf8>), int Function(Pointer<Utf8>, Pointer<Utf8>)>('SDL_SetHint');
       final name = 'SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS'.toNativeUtf8();
       final value = '1'.toNativeUtf8();
@@ -69,6 +99,7 @@ class WindowsControls {
       if (y > deadZone) down.add(12);
       final previous = _previous[entry.key] ?? <int>{};
       for (final b in down.difference(previous)) {
+        _recordInput(entry.key, b, down, x, y);
         events.add(PadEvent(entry.key, b, down));
       }
       _previous[entry.key] = down;
@@ -83,6 +114,8 @@ class WindowsControls {
       for (final pointer in _controllers.values) { close(pointer); }
       sdl.lookupFunction<Void Function(Uint32), void Function(int)>('SDL_QuitSubSystem')(0x2000 | 0x200);
     }
+    unawaited(_diagnosticSink?.flush() ?? Future<void>.value());
+    unawaited(_diagnosticSink?.close() ?? Future<void>.value());
     events.close();
   }
 }
