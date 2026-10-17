@@ -35,6 +35,8 @@ void main() {
       await tester.runAsync(() async {
         final loader = FontLoader('RetroBoxSans')..addFont(rootBundle.load('assets/android/Roboto.ttf'));
         await loader.load();
+        final icons = FontLoader('MaterialIcons')..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'));
+        await icons.load();
         final context = tester.element(find.byType(RetroBoxHome));
         for (final name in ['retrobox_arcade_background','retrobox_library_background','system_atari_realistic','system_nes_realistic','system_snes_realistic','system_sega_realistic','system_arcade_realistic']) {
           await precacheImage(AssetImage('assets/android/$name.png'),context);
@@ -45,7 +47,7 @@ void main() {
       for (final name in ['ATARI 2600','NES','SUPER NES','SEGA GENESIS','ARCADE']) {
         expect(find.text(name), findsOneWidget);
       }
-      expect(find.text('＋  AGREGAR JUEGOS'),findsOneWidget);
+      expect(find.text('AGREGAR JUEGOS'),findsOneWidget);
       await tester.runAsync(() async {
         final image = await (boundary.currentContext!.findRenderObject() as RenderRepaintBoundary).toImage();
         final data = await image.toByteData(format: ui.ImageByteFormat.png);
@@ -56,7 +58,7 @@ void main() {
       });
       expect(find.textContaining('Licencia'),findsNothing);
       await tester.runAsync(() async {
-        await tester.tap(find.text('⚙  AJUSTES'));
+        await tester.tap(find.byIcon(Icons.settings));
         // File-backed preferences finish in the real async zone before animation pumps.
         await Future<void>.delayed(const Duration(milliseconds: 200));
       });

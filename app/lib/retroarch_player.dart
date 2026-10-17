@@ -33,6 +33,8 @@ class RetroArchPlayer extends StatefulWidget {
 
 class _RetroArchPlayerState extends State<RetroArchPlayer> {
   Process? _process;
+  RawDatagramSocket? _commands;
+  int _commandPort = 0;
   IOSink? _log;
   String _status = 'Preparando juego…';
   bool _running = false;
@@ -141,6 +143,10 @@ class _RetroArchPlayerState extends State<RetroArchPlayer> {
       }
 
       // CLI paths are individual arguments. Never invoke a command shell.
+      final reservation = await RawDatagramSocket.bind(InternetAddress.loopbackIPv4,0);
+      _commandPort = reservation.port;
+      reservation.close();
+      _commands = await RawDatagramSocket.bind(InternetAddress.loopbackIPv4,0);
       final config = File('${root.path}/session.cfg');
       final values = <String, String>{
         'config_save_on_exit': 'false',
@@ -155,8 +161,9 @@ class _RetroArchPlayerState extends State<RetroArchPlayer> {
         'input_exit_emulator': '"nul"',
         'input_quit_gamepad_combo': '0',
         'quit_press_twice': 'false',
-        'stdin_cmd_enable': 'true',
-        'network_cmd_enable': 'false',
+        'stdin_cmd_enable': 'false',
+        'network_cmd_enable': 'true',
+        'network_cmd_port': _commandPort.toString(),
         'menu_driver': '"rgui"',
         'rgui_show_start_screen': 'false',
         'ui_companion_start_on_boot': 'false',
@@ -198,11 +205,13 @@ class _RetroArchPlayerState extends State<RetroArchPlayer> {
       await log.close();
       _log = null;
       _process = null;
+      _commands?.close(); _commands = null;
       if (!mounted) return;
       setState(() { _running = false; _status = code == 0 ? 'Partida cerrada. Puedes elegir otro juego.' : 'El motor terminó con código $code. Registro: ${root.path}/logs/last-session.log'; });
       if (code == 0) Navigator.of(context).pop();
     } catch (error) {
       if (_process == null) {
+        _commands?.close(); _commands = null;
         await _log?.close();
         _log = null;
       }
@@ -212,8 +221,7 @@ class _RetroArchPlayerState extends State<RetroArchPlayer> {
 
   Future<void> _quit() async {
     try {
-      _process?.stdin.writeln('QUIT');
-      await _process?.stdin.flush();
+      await _command('QUIT');
       if (mounted) setState(() => _status = 'Cerrando partida y guardando… Si el motor no responde, usa Esc en su ventana.');
     } catch (error) {
       if (mounted) setState(() => _status = 'Usa Esc en la ventana del juego para salir. $error');
@@ -247,8 +255,7 @@ class _RetroArchPlayerState extends State<RetroArchPlayer> {
   }
 
   Future<void> _command(String command) async {
-    _process?.stdin.writeln(command);
-    await _process?.stdin.flush();
+    _commands?.send(utf8.encode(command),InternetAddress.loopbackIPv4,_commandPort);
   }
 
   Future<void> _exitMenu() async {

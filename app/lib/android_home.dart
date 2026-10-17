@@ -215,11 +215,11 @@ extension AndroidHome on _RetroBoxHomeState {
         Padding(padding: const EdgeInsets.fromLTRB(30, 11, 30, 10), child: Column(children: [
           SizedBox(height: 44, child: Row(children: [
             const Expanded(child: FittedBox(alignment: Alignment.centerLeft, fit: BoxFit.scaleDown, child: Text.rich(TextSpan(children: [TextSpan(text: 'RETRO', style: TextStyle(color: Colors.white)), TextSpan(text: 'BOX', style: TextStyle(color: Color(0xFF23C4FF)))]), style: TextStyle(fontSize: 29, fontWeight: FontWeight.bold)))),
-            RetroButton(onPressed: _busy ? null : _sourcePicker, child: Text('＋  ${tr('ADD YOUR GAMES','AGREGAR JUEGOS')}')),
+            RetroButton(onPressed: _busy ? null : _sourcePicker, child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.add,size: 16),const SizedBox(width: 6),Text(tr('ADD YOUR GAMES','AGREGAR JUEGOS'))])),
             const SizedBox(width: 8),
-            RetroButton(onPressed: _busy ? null : _engineSettings, child: Text('⚙  ${tr('SETTINGS','AJUSTES')}')),
+            RetroButton(onPressed: _busy ? null : _engineSettings, child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.settings,size: 16),const SizedBox(width: 6),Text(tr('SETTINGS','AJUSTES'))])),
             const SizedBox(width: 8),
-            RetroButton(onPressed: _exitApp, child: Text('⏻  ${tr('EXIT','SALIR')}')),
+            RetroButton(onPressed: _exitApp, child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.power_settings_new,size: 16),const SizedBox(width: 6),Text(tr('EXIT','SALIR'))])),
           ])),
           Container(height: 23, alignment: Alignment.centerLeft, color: const Color(0x7D000000), padding: const EdgeInsets.symmetric(horizontal: 6),
             child: Text('$system  •  ${games.length} ${tr('games','juegos')}  •  START = ${tr('Play','Jugar')}  •  ${tr('SETTINGS = Options','AJUSTES = Opciones')}', style: const TextStyle(color: Color(0xFFA9B0BA), fontSize: 13))),
@@ -244,7 +244,7 @@ extension AndroidHome on _RetroBoxHomeState {
           if (_busy) const LinearProgressIndicator(),
           if (games.isNotEmpty) Container(height: 66, padding: const EdgeInsets.all(5), decoration: BoxDecoration(color: const Color(0xCC081018), border: Border.all(color: const Color(0x6639C8FF)), borderRadius: BorderRadius.circular(8)),
             child: Row(children: [Expanded(child: ListView.builder(scrollDirection: Axis.horizontal, itemCount: games.length, itemBuilder: (_,index) => Opacity(opacity: index == _selected ? 1 : .35, child: SizedBox(width: 66, child: Padding(padding: const EdgeInsets.all(4), child: _cover(games[index])))))), SizedBox(width: 130, child: Text('${games.length} ${tr('GAMES','JUEGOS')}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)))])),
-          SizedBox(height: 34, child: Center(child: Text('◀ ▶  ${tr('Browse','Navegar')}     START  ${tr('Play','Jugar')}     ${tr('SETTINGS  Options','AJUSTES  Opciones')}', style: const TextStyle(color: Color(0xFFBEC6D2), fontSize: 12)))),
+          SizedBox(height: 34, child: Center(child: Text('< >  ${tr('Browse','Navegar')}     START  ${tr('Play','Jugar')}     ${tr('SETTINGS  Options','AJUSTES  Opciones')}', style: const TextStyle(color: Color(0xFFBEC6D2), fontSize: 12)))),
         ])),
       ]),
     ));

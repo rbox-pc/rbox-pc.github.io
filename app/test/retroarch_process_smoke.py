@@ -1,10 +1,11 @@
 """Run the packaged engine, not a substitute, with an original diagnostic NES ROM.
 
 The ROM only sets a blue background and loops. It contains no third-party game
-data. This checks loading, stdin SAVE_STATE/QUIT and the exact .state.auto path;
+data. This checks loading, loopback SAVE_STATE/QUIT and the exact .state.auto path;
 it does not establish that a commercial game, controller or audio works.
 """
 import pathlib
+import socket
 import subprocess
 import sys
 import tempfile
@@ -29,10 +30,22 @@ def run(engine: pathlib.Path) -> None:
         rom.write_bytes(b"NES\x1a" + bytes([1, 1]) + bytes(10) + prg + bytes(8192))
         state = root / "diagnostic.state"
         config = root / "smoke.cfg"
+        reservation = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        reservation.bind(('127.0.0.1',0))
+        port = reservation.getsockname()[1]
+        reservation.close()
+        commands = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+        (root / 'states').mkdir()
+        (root / 'saves').mkdir()
+        state = root / 'states' / 'diagnostic.state'
         config.write_text(
             'video_driver = "gdi"\nvideo_fullscreen = false\n'
             'audio_enable = false\npause_nonactive = false\n'
-            'stdin_cmd_enable = true\nnetwork_cmd_enable = false\n'
+            f'stdin_cmd_enable = false\nnetwork_cmd_enable = true\nnetwork_cmd_port = {port}\n'
+            f'savestate_directory = "{(root / "states").as_posix()}"\n'
+            f'savefile_directory = "{(root / "saves").as_posix()}"\n'
+            'sort_savestates_enable = false\nsort_savefiles_enable = false\n'
+            'sort_savestates_by_content_enable = false\nsort_savefiles_by_content_enable = false\n'
             'state_slot = -1\nsavestate_auto_save = false\n'
             'savestate_auto_load = false\nconfig_save_on_exit = false\n'
             'menu_driver = "rgui"\nui_companion_start_on_boot = false\n',
@@ -51,15 +64,13 @@ def run(engine: pathlib.Path) -> None:
                 while time.monotonic() < deadline:
                     if process.poll() is not None:
                         raise RuntimeError(f"Engine exited before saving: {process.returncode}")
-                    process.stdin.write(b"SAVE_STATE\n")
-                    process.stdin.flush()
+                    commands.sendto(b'SAVE_STATE',('127.0.0.1',port))
                     time.sleep(0.25)
                     if expected.exists() and expected.stat().st_size > 0:
                         break
                 else:
                     raise RuntimeError("SAVE_STATE did not produce diagnostic.state.auto")
-                process.stdin.write(b"QUIT\n")
-                process.stdin.flush()
+                commands.sendto(b'QUIT',('127.0.0.1',port))
                 result = process.wait(timeout=15)
                 if result != 0:
                     raise RuntimeError(f"QUIT returned {result}")
@@ -70,6 +81,8 @@ def run(engine: pathlib.Path) -> None:
                     process.wait()
                 print(log.read_text(encoding="utf-8", errors="replace"))
                 raise
+            finally:
+                commands.close()
 
 
 if __name__ == "__main__":
