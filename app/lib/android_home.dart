@@ -157,40 +157,41 @@ extension AndroidHome on _RetroBoxHomeState {
     } finally { client.close(force: true); if (mounted) _refresh(() => _busy = false); }
   }
 
+  // Controller menu zones: 0 = top actions, 1 = systems, 2 = games.
+  int _controllerZone = 1;
+  int _topAction = 0;
+
   void _pad(PadEvent event) {
     if (!mounted || _playing) return;
+    final button = event.button;
     if (ModalRoute.of(context)?.isCurrent != true) {
       final focus = FocusManager.instance.primaryFocus;
-      if (event.button == 11) focus?.previousFocus();
-      if (event.button == 12) focus?.nextFocus();
-      if ([0, 6].contains(event.button) && focus?.context != null) {
+      if (button == 11 || button == 13) focus?.previousFocus();
+      if (button == 12 || button == 14) focus?.nextFocus();
+      if ([0, 6].contains(button) && focus?.context != null) {
         Actions.maybeInvoke(focus!.context!, const ActivateIntent());
       }
       return;
     }
-
-    // D-pad and left analog stick use the same SDL direction codes.
-    if (event.button == 11) {
-      // Up moves from games to the console selector, then to top actions.
-      if (_inGames) {
-        _refresh(() => _inGames = false);
-      } else {
-        FocusScope.of(context).nextFocus();
-      }
+    if (button == 11) {
+      _refresh(() {
+        if (_controllerZone > 0) _controllerZone--;
+        _inGames = _controllerZone == 2;
+      });
       return;
     }
-    if (event.button == 12) {
-      // Down returns to the game library when games are available.
-      if (currentGames.isNotEmpty) {
-        _refresh(() => _inGames = true);
-      } else {
-        FocusScope.of(context).nextFocus();
-      }
+    if (button == 12) {
+      _refresh(() {
+        if (_controllerZone < 2) _controllerZone++;
+        _inGames = _controllerZone == 2;
+      });
       return;
     }
-    if ([13, 14].contains(event.button)) {
-      final direction = event.button == 13 ? -1 : 1;
-      if (!_inGames) {
+    if (button == 13 || button == 14) {
+      final direction = button == 13 ? -1 : 1;
+      if (_controllerZone == 0) {
+        _refresh(() => _topAction = (_topAction + direction).clamp(0, 2));
+      } else if (_controllerZone == 1) {
         _changeSystem((_current + direction).clamp(0, 4));
       } else if (currentGames.isNotEmpty) {
         _refresh(() => _selected = (_selected + direction).clamp(0, currentGames.length - 1));
@@ -204,13 +205,17 @@ extension AndroidHome on _RetroBoxHomeState {
       }
       return;
     }
-    if ([0, 6].contains(event.button) && !_busy) {
-      if (_inGames && currentGames.isNotEmpty) {
-        _play(currentGames[_selected.clamp(0, currentGames.length - 1)]);
+    if ([0, 6].contains(button) && !_busy) {
+      if (_controllerZone == 0) {
+        switch (_topAction) {
+          case 0: _sourcePicker(); break;
+          case 1: _engineSettings(); break;
+          case 2: _exitApp(); break;
+        }
+      } else if (_controllerZone == 1) {
+        _refresh(() { _controllerZone = 2; _inGames = true; });
       } else if (currentGames.isNotEmpty) {
-        _refresh(() => _inGames = true);
-      } else {
-        FocusScope.of(context).nextFocus();
+        _play(currentGames[_selected.clamp(0, currentGames.length - 1)]);
       }
     }
   }
@@ -248,17 +253,17 @@ extension AndroidHome on _RetroBoxHomeState {
         Padding(padding: const EdgeInsets.fromLTRB(30, 11, 30, 10), child: Column(children: [
           SizedBox(height: 44, child: Row(children: [
             const Expanded(child: FittedBox(alignment: Alignment.centerLeft, fit: BoxFit.scaleDown, child: Text.rich(TextSpan(children: [TextSpan(text: 'RETRO', style: TextStyle(color: Colors.white)), TextSpan(text: 'BOX', style: TextStyle(color: Color(0xFF23C4FF)))]), style: TextStyle(fontSize: 29, fontWeight: FontWeight.bold)))),
-            RetroButton(onPressed: _busy ? null : _sourcePicker, child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.add,size: 16),const SizedBox(width: 6),Text(tr('ADD YOUR GAMES','AGREGAR JUEGOS'))])),
+            RetroButton(selected: _controllerZone == 0 && _topAction == 0, onPressed: _busy ? null : _sourcePicker, child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.add,size: 16),const SizedBox(width: 6),Text(tr('ADD YOUR GAMES','AGREGAR JUEGOS'))])),
             const SizedBox(width: 8),
-            RetroButton(onPressed: _busy ? null : _engineSettings, child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.settings,size: 16),const SizedBox(width: 6),Text(tr('SETTINGS','AJUSTES'))])),
+            RetroButton(selected: _controllerZone == 0 && _topAction == 1, onPressed: _busy ? null : _engineSettings, child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.settings,size: 16),const SizedBox(width: 6),Text(tr('SETTINGS','AJUSTES'))])),
             const SizedBox(width: 8),
-            RetroButton(onPressed: _exitApp, child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.power_settings_new,size: 16),const SizedBox(width: 6),Text(tr('EXIT','SALIR'))])),
+            RetroButton(selected: _controllerZone == 0 && _topAction == 2, onPressed: _exitApp, child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.power_settings_new,size: 16),const SizedBox(width: 6),Text(tr('EXIT','SALIR'))])),
           ])),
           Container(height: 23, alignment: Alignment.centerLeft, color: const Color(0x7D000000), padding: const EdgeInsets.symmetric(horizontal: 6),
             child: Text('$system  •  ${games.length} ${tr('games','juegos')}  •  START = ${tr('Play','Jugar')}  •  ${tr('SETTINGS = Options','AJUSTES = Opciones')}', style: const TextStyle(color: Color(0xFFA9B0BA), fontSize: 13))),
           const SizedBox(height: 5),
           SizedBox(height: 70, child: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 800), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(5,(index) => Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 5), child: RetroButton(
-            selected: _current == index, onPressed: () { _changeSystem(index); _inGames = true; },
+            selected: _controllerZone == 1 && _current == index, onPressed: () { _changeSystem(index); _controllerZone = 2; _inGames = true; },
             child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Image.asset('assets/android/system_${_androidArt[index]}_realistic.png', width: index == 1 ? 64 : 70, height: 34, fit: BoxFit.contain), Text(_androidLabels[index], style: const TextStyle(fontSize: 11.5), maxLines: 1)]),
           )))))))),
           Expanded(child: games.isEmpty ? GestureDetector(behavior: HitTestBehavior.opaque, onTap: _sourcePicker, child: Center(child: Text(_games.isEmpty ? '' : tr('No $system games added\n\n＋ ADD YOUR GAMES','No hay juegos de $system\n\n＋ AGREGA TUS JUEGOS'), textAlign: TextAlign.center, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)))) : LayoutBuilder(builder: (context, constraints) {
@@ -267,7 +272,7 @@ extension AndroidHome on _RetroBoxHomeState {
             return ListView.separated(controller: _carousel, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8), scrollDirection: Axis.horizontal,
               itemCount: games.length, separatorBuilder: (_, __) => const SizedBox(width: 16),
               itemBuilder: (context,index) => Center(child: SizedBox(width: width, height: height, child: RetroButton(
-                selected: _inGames && _selected == index, onFocus: () => _refresh(() { _selected = index; _inGames = true; }),
+                selected: _controllerZone == 2 && _selected == index, onFocus: () => _refresh(() { _selected = index; _controllerZone = 2; _inGames = true; }),
                 onPressed: () => _play(games[index]),
                 child: Column(children: [Expanded(child: _cover(games[index])), const SizedBox(height: 3), SizedBox(height: 48, child: Center(child: Text(displayGameName(games[index].system,_baseName(games[index].romPath)), maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold))))]),
               ))),
