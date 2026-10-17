@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
@@ -31,6 +32,14 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       final boundary = GlobalKey();
       await tester.pumpWidget(RepaintBoundary(key: boundary, child: const RetroBoxApp()));
+      await tester.runAsync(() async {
+        final loader = FontLoader('RetroBoxSans')..addFont(rootBundle.load('assets/android/Roboto.ttf'));
+        await loader.load();
+        final context = tester.element(find.byType(RetroBoxHome));
+        for (final name in ['retrobox_arcade_background','retrobox_library_background','system_atari_realistic','system_nes_realistic','system_snes_realistic','system_sega_realistic','system_arcade_realistic']) {
+          await precacheImage(AssetImage('assets/android/$name.png'),context);
+        }
+      });
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       for (final name in ['ATARI 2600','NES','SUPER NES','SEGA GENESIS','ARCADE']) {
