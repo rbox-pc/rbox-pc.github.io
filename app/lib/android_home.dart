@@ -163,22 +163,55 @@ extension AndroidHome on _RetroBoxHomeState {
       final focus = FocusManager.instance.primaryFocus;
       if (event.button == 11) focus?.previousFocus();
       if (event.button == 12) focus?.nextFocus();
-      if ([0,6].contains(event.button) && focus?.context != null) Actions.maybeInvoke(focus!.context!, const ActivateIntent());
+      if ([0, 6].contains(event.button) && focus?.context != null) {
+        Actions.maybeInvoke(focus!.context!, const ActivateIntent());
+      }
       return;
     }
-    if (event.button == 11) { _refresh(() => _inGames = false); return; }
-    if (event.button == 12) { _refresh(() => _inGames = true); return; }
-    if ([13,14].contains(event.button)) {
-      final direction = event.button == 13 ? -1 : 1;
-      if (!_inGames) { _changeSystem((_current + direction).clamp(0,4)); }
-      else if (currentGames.isNotEmpty) {
-        _refresh(() => _selected = (_selected + direction).clamp(0,currentGames.length-1));
-        if (_carousel.hasClients) _carousel.animateTo((_selected * 196.0).clamp(0,_carousel.position.maxScrollExtent), duration: const Duration(milliseconds: 160), curve: Curves.easeOut);
+
+    // D-pad and left analog stick use the same SDL direction codes.
+    if (event.button == 11) {
+      // Up moves from games to the console selector, then to top actions.
+      if (_inGames) {
+        _refresh(() => _inGames = false);
+      } else {
+        FocusScope.of(context).nextFocus();
       }
+      return;
     }
-    if ([0,6].contains(event.button) && !_busy && currentGames.isNotEmpty) {
-      if (_inGames) { _play(currentGames[_selected.clamp(0,currentGames.length-1)]); }
-      else { _refresh(() => _inGames = true); }
+    if (event.button == 12) {
+      // Down returns to the game library when games are available.
+      if (currentGames.isNotEmpty) {
+        _refresh(() => _inGames = true);
+      } else {
+        FocusScope.of(context).nextFocus();
+      }
+      return;
+    }
+    if ([13, 14].contains(event.button)) {
+      final direction = event.button == 13 ? -1 : 1;
+      if (!_inGames) {
+        _changeSystem((_current + direction).clamp(0, 4));
+      } else if (currentGames.isNotEmpty) {
+        _refresh(() => _selected = (_selected + direction).clamp(0, currentGames.length - 1));
+        if (_carousel.hasClients) {
+          _carousel.animateTo(
+            (_selected * 196.0).clamp(0.0, _carousel.position.maxScrollExtent),
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOut,
+          );
+        }
+      }
+      return;
+    }
+    if ([0, 6].contains(event.button) && !_busy) {
+      if (_inGames && currentGames.isNotEmpty) {
+        _play(currentGames[_selected.clamp(0, currentGames.length - 1)]);
+      } else if (currentGames.isNotEmpty) {
+        _refresh(() => _inGames = true);
+      } else {
+        FocusScope.of(context).nextFocus();
+      }
     }
   }
 
