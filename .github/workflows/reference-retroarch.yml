@@ -1,0 +1,131 @@
+name: Windows reference - original RetroArch
+on:
+  push:
+    branches: [reference-retroarch]
+    paths: ['.github/workflows/reference-retroarch.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  reference:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download original stable Windows package, core snapshot and source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force downloads, package
+          $base = "https://buildbot.libretro.com/stable/1.22.2/windows/x86_64"
+          Invoke-WebRequest "$base/RetroArch.7z" -OutFile downloads/RetroArch.7z
+          Invoke-WebRequest "$base/RetroArch_cores.7z" -OutFile downloads/RetroArch_cores.7z
+          Invoke-WebRequest "https://github.com/libretro/RetroArch/releases/download/v1.22.2/retroarch-sourceonly-1.22.2.tar.xz" -OutFile downloads/retroarch-sourceonly-1.22.2.tar.xz
+          $expected = "2a8b1713f7f4d2b53bad3e2297e48d78f5666098cf00d583d3e08f3c213f8aa6"
+          if ((Get-FileHash downloads/retroarch-sourceonly-1.22.2.tar.xz -Algorithm SHA256).Hash.ToLower() -ne $expected) { throw "Official source archive hash mismatch" }
+          Get-ChildItem downloads -File | Get-FileHash -Algorithm SHA256 | Format-Table -AutoSize | Out-File package/DOWNLOAD_HASHES.txt
+          & 7z x downloads/RetroArch.7z "-opackage" -y
+          if ($LASTEXITCODE -ne 0) { throw "RetroArch extraction failed" }
+          $exe = @(Get-ChildItem package -Recurse -Filter retroarch.exe)
+          if ($exe.Count -ne 1) { throw "Expected exactly one original retroarch.exe" }
+          $root = $exe[0].Directory.FullName
+          New-Item -ItemType Directory -Force "$root/cores", "$root/system", "$root/source"
+          & 7z e downloads/RetroArch_cores.7z "-o$root/cores" -r "*stella2014_libretro.dll" "*fceumm_libretro.dll" "*snes9x2010_libretro.dll" "*genesis_plus_gx_libretro.dll" "*fbneo_libretro.dll" -y
+          if ($LASTEXITCODE -ne 0) { throw "Core extraction failed" }
+          Copy-Item downloads/retroarch-sourceonly-1.22.2.tar.xz "$root/source/"
+          "REFERENCE_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Copy original controller profiles
+        uses: actions/checkout@v4
+        with:
+          repository: libretro/retroarch-joypad-autoconfig
+          path: controller-profiles
+      - name: Include profiles and original source references
+        shell: pwsh
+        run: |
+          $root = $env:REFERENCE_ROOT
+          New-Item -ItemType Directory -Force "$root/autoconfig"
+          Copy-Item controller-profiles/* "$root/autoconfig/" -Recurse -Force
+          $profile = "$root/autoconfig/sdl2/Nintendo Switch Pro Controller.cfg"
+          if (!(Test-Path $profile)) { throw "Original Nintendo Switch Pro SDL2 profile missing" }
+          git -C controller-profiles rev-parse HEAD | Out-File "$root/source/CONTROLLER_PROFILES_COMMIT.txt"
+          @'
+          # Original RetroArch reference. Only controller driver selection is set here.
+          input_joypad_driver = "sdl2"
+          input_autodetect_enable = "true"
+          '@ | Set-Content "$root/REFERENCE_SWITCH.cfg"
+          @'
+          @echo off
+          cd /d "%~dp0"
+          retroarch.exe --appendconfig REFERENCE_SWITCH.cfg
+          '@ | Set-Content "$root/ABRIR_CON_MANDO_SWITCH.bat"
+          @'
+          PRUEBA DE REFERENCIA - RETROARCH ORIGINAL 1.22.2 PARA WINDOWS X64
+
+          Esto es RetroArch original, NO la interfaz Flutter de RetroBox.
+          El ejecutable y los cinco cores provienen de la distribucion oficial.
+          Todavia no se ha confirmado que funcionen en TU PC.
+
+          1. Extrae TODO este paquete en una carpeta nueva.
+          2. Abre retroarch.exe. Para probar mando Switch: ABRIR_CON_MANDO_SWITCH.bat.
+          3. Load Core / Cargar nucleo: elige el core de la consola.
+          4. Load Content / Cargar contenido: elige tu juego.
+          Atari: Stella 2014. NES: FCEUmm. SNES: Snes9x 2010.
+          Sega Genesis: Genesis Plus GX. Arcade: FinalBurn Neo.
+          Arcade necesita un ROM set compatible con FBNeo; algunos juegos requieren
+          BIOS proporcionada por el usuario en system, como neogeo.zip.
+          No se incluyen juegos ni BIOS.
+          Usa los archivos ROM originales; esta referencia no usa el importador ZIP
+          personalizado del prototipo Flutter.
+
+          Queremos comprobar: imagen, sonido, mando, guardar y recuperar partida,
+          y los cinco sistemas antes de adaptar nada a RetroBox.
+          No hay Turbify, licencias de RetroBox, promociones ni cobros.
+          Conserva tus archivos y guardados anteriores en sus carpetas actuales.
+
+          Source: source/retroarch-sourceonly-1.22.2.tar.xz (sin modificaciones)
+          https://github.com/libretro/RetroArch/tree/v1.22.2
+          https://github.com/libretro/stella2014-libretro
+          https://github.com/libretro/libretro-fceumm
+          https://github.com/libretro/snes9x2010
+          https://github.com/libretro/Genesis-Plus-GX
+          https://github.com/finalburnneo/FBNeo
+
+          Los nombres, creditos y licencias originales se conservan.
+          Este paquete es para evaluar la base original, no una distribucion
+          comercial de RetroBox. Las licencias de cada componente se revisaran
+          antes de cualquier distribucion comercial.
+          '@ | Set-Content "$root/LEEME_PRIMERO.txt"
+      - name: Check real DLL loading and core identities
+        shell: pwsh
+        run: |
+          $env:CORE_ROOT = "$env:REFERENCE_ROOT/cores"
+          @'
+          import ctypes as c, os
+          from pathlib import Path
+          class Info(c.Structure):
+              _fields_ = [('name', c.c_char_p), ('version', c.c_char_p),
+                          ('extensions', c.c_char_p), ('fullpath', c.c_bool),
+                          ('block_extract', c.c_bool)]
+          names = ['stella2014', 'fceumm', 'snes9x2010', 'genesis_plus_gx', 'fbneo']
+          report = []
+          for name in names:
+              path = Path(os.environ['CORE_ROOT']) / (name + '_libretro.dll')
+              if not path.is_file(): raise RuntimeError('Required core missing: ' + str(path))
+              core = c.CDLL(str(path.resolve()))
+              info = Info()
+              core.retro_get_system_info.argtypes = [c.POINTER(Info)]
+              core.retro_get_system_info(c.byref(info))
+              if not info.name: raise RuntimeError('Empty core identity: ' + name)
+              row = name + ': ' + info.name.decode() + ' ' + info.version.decode()
+              print(row)
+              report.append(row)
+          (Path(os.environ['REFERENCE_ROOT']) / 'CORE_IDENTITIES.txt').write_text('\n'.join(report))
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { throw "Real core DLL load check failed" }
+      - name: Upload original reference package
+        uses: actions/upload-artifact@v4
+        with:
+          name: RetroArch-Original-Windows-5-Consolas-PRUEBA
+          path: package/
+          retention-days: 14
+          if-no-files-found: error
