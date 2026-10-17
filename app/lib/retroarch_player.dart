@@ -139,12 +139,12 @@ class _RetroArchPlayerState extends State<RetroArchPlayer> {
           ['--verbose', '--config', config.path, '-L', core.path, widget.romPath],
           workingDirectory: engine.parent.path);
       _process = process;
-      final output = process.stdout.listen(log.add);
-      final errors = process.stderr.listen(log.add);
+      final output = process.stdout.listen(log.add).asFuture<void>();
+      final errors = process.stderr.listen(log.add).asFuture<void>();
       if (mounted) setState(() { _running = true; _starting = false; _status = 'Jugando. Esc o Start + Select para volver.'; });
       final code = await process.exitCode;
-      await output.asFuture<void>();
-      await errors.asFuture<void>();
+      await output;
+      await errors;
       await log.flush();
       await log.close();
       _log = null;
