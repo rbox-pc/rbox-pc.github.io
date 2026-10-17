@@ -33,7 +33,7 @@ void main() {
       await tester.pumpWidget(RepaintBoundary(key: boundary, child: const RetroBoxApp()));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      for (final name in ['Atari 2600','NES','SNES','Sega Genesis','Arcade']) {
+      for (final name in ['ATARI 2600','NES','SUPER NES','SEGA GENESIS','ARCADE']) {
         expect(find.text(name), findsOneWidget);
       }
       expect(find.text('＋  AGREGAR JUEGOS'),findsOneWidget);

@@ -1,5 +1,6 @@
 part of 'main.dart';
 
+const _androidLabels = ['ATARI 2600','NES','SUPER NES','SEGA GENESIS','ARCADE'];
 const _androidArt = ['atari', 'nes', 'snes', 'sega', 'arcade'];
 const _accent = Color(0xFF46C2FF);
 
@@ -107,7 +108,7 @@ extension AndroidHome on _RetroBoxHomeState {
       if (_extension(chosen.name) == 'zip') {
         // An Arcade ROM is already a ZIP. A package has category folders inside.
         final archive = ZipDecoder().decodeBytes(bytes);
-        final isPackage = archive.any((entry) => RegExp(r'(^|/)(roms|covers|cheats|cores|emulators|bios|system)/', caseSensitive: false).hasMatch(entry.name.replaceAll('\\', '/')));
+        final isPackage = archive.any((entry) => RegExp(r'(^|/)(roms|covers|cheats|cores|emulators|bios|system)/', caseSensitive: false).hasMatch(entry.name.replaceAll('\\', '/'))) || archive.any((entry) => ['nes','sfc','smc','md','gen','smd','a26','dll'].contains(_extension(entry.name)));
         if (isPackage) { await _importZip(bytes); } else { await _importRom(chosen.path); }
       } else { await _importRom(chosen.path); }
     } else if (source == 'url') { await _urlImport(); }
@@ -223,11 +224,11 @@ extension AndroidHome on _RetroBoxHomeState {
           Container(height: 23, alignment: Alignment.centerLeft, color: const Color(0x7D000000), padding: const EdgeInsets.symmetric(horizontal: 6),
             child: Text('$system  •  ${games.length} ${tr('games','juegos')}  •  START = ${tr('Play','Jugar')}  •  ${tr('SETTINGS = Options','AJUSTES = Opciones')}', style: const TextStyle(color: Color(0xFFA9B0BA), fontSize: 13))),
           const SizedBox(height: 5),
-          SizedBox(height: 70, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(5,(index) => Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 5), child: RetroButton(
+          SizedBox(height: 70, child: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 800), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(5,(index) => Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 5), child: RetroButton(
             selected: _current == index, onPressed: () { _changeSystem(index); _inGames = true; },
-            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Image.asset('assets/android/system_${_androidArt[index]}_realistic.png', width: index == 1 ? 64 : 70, height: 34, fit: BoxFit.contain), Text(_systems.keys.elementAt(index), style: const TextStyle(fontSize: 11.5), maxLines: 1)]),
-          )))))),
-          Expanded(child: games.isEmpty ? Center(child: RetroButton(onPressed: _sourcePicker, child: Padding(padding: const EdgeInsets.all(25), child: Text(_games.isEmpty ? tr('ADD YOUR GAMES','AGREGA TUS JUEGOS') : tr('No $system games added','No hay juegos de $system'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold))))) : LayoutBuilder(builder: (context, constraints) {
+            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Image.asset('assets/android/system_${_androidArt[index]}_realistic.png', width: index == 1 ? 64 : 70, height: 34, fit: BoxFit.contain), Text(_androidLabels[index], style: const TextStyle(fontSize: 11.5), maxLines: 1)]),
+          )))))))),
+          Expanded(child: games.isEmpty ? GestureDetector(behavior: HitTestBehavior.opaque, onTap: _sourcePicker, child: Center(child: Text(_games.isEmpty ? '' : tr('No $system games added\n\n＋ ADD YOUR GAMES','No hay juegos de $system\n\n＋ AGREGA TUS JUEGOS'), textAlign: TextAlign.center, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)))) : LayoutBuilder(builder: (context, constraints) {
             final height = (constraints.maxHeight-16).clamp(130.0,310.0);
             final width = (height * .77).clamp(150.0,220.0);
             return ListView.separated(controller: _carousel, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8), scrollDirection: Axis.horizontal,
@@ -235,7 +236,7 @@ extension AndroidHome on _RetroBoxHomeState {
               itemBuilder: (context,index) => Center(child: SizedBox(width: width, height: height, child: RetroButton(
                 selected: _inGames && _selected == index, onFocus: () => _refresh(() { _selected = index; _inGames = true; }),
                 onPressed: () => _play(games[index]),
-                child: Column(children: [Expanded(child: _cover(games[index])), const SizedBox(height: 3), SizedBox(height: 48, child: Center(child: Text(games[index].title, maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold))))]),
+                child: Column(children: [Expanded(child: _cover(games[index])), const SizedBox(height: 3), SizedBox(height: 48, child: Center(child: Text(displayGameName(games[index].system,_baseName(games[index].romPath)), maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold))))]),
               ))),
             );
           })),

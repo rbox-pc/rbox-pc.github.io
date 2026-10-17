@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'retroarch_player.dart';
 import 'windows_controls.dart';
+import 'game_names.dart';
 import 'package:flutter/services.dart';
 
 import 'package:archive/archive.dart';
@@ -172,7 +173,7 @@ class _RetroBoxHomeState extends State<RetroBoxHome> {
       await target.parent.create(recursive: true);
       await File(selectedPath).copy(target.path);
       final games = [..._games.where((g) => !(g.system == system && g.romPath == target.path)),
-        GameEntry(system: system, title: _stem(selectedPath), romPath: target.path)];
+        GameEntry(system: system, title: _stem(selectedPath), romPath: target.path, coverPath: _oldGame(system,_stem(selectedPath))?.coverPath, cheatPath: _oldGame(system,_stem(selectedPath))?.cheatPath)];
       await _saveLibrary(root, games);
       if (mounted) setState(() { _games = games; _message = 'Juego importado: ${_stem(selectedPath)}'; });
     } catch (error) {
