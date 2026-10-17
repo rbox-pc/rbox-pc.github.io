@@ -44,7 +44,7 @@ jobs:
           # Keep runtime DLLs; discard themes, databases, shaders, overlays and debug tools.
           Copy-Item "$source/*.dll" $engine
           Get-ChildItem $source -File | Where-Object { $_.Name -match 'COPYING|LICENSE' } | Copy-Item -Destination $engine
-          $cores = @('stella2014_libretro.dll','fceumm_libretro.dll','snes9x2010_libretro.dll','genesis_plus_gx_libretro.dll','fbneo_libretro.dll')
+          $cores = @('stella_libretro.dll','fceumm_libretro.dll','bsnes_libretro.dll','blastem_libretro.dll','mame_libretro.dll')
           foreach ($core in $cores) {
             7z e cores.7z "-o$engine/cores" $core -r -y | Out-Null
             if ($LASTEXITCODE -or !(Test-Path "$engine/cores/$core")) { throw "Missing core $core" }
@@ -66,6 +66,24 @@ jobs:
             Copy-Item "controller-profiles/$driver" $destination -Recurse
           }
           if (!(Test-Path "$destination/sdl2/Nintendo Switch Pro Controller.cfg")) { throw 'Switch profile missing' }
+      - name: Validate native cores
+        shell: pwsh
+        run: |
+          @'
+          import ctypes, pathlib
+          root = pathlib.Path("app/build/windows/x64/runner/Release/engine")
+          class Info(ctypes.Structure):
+              _fields_ = [("name", ctypes.c_char_p), ("version", ctypes.c_char_p), ("extensions", ctypes.c_char_p), ("fullpath", ctypes.c_bool), ("block_extract", ctypes.c_bool)]
+          for path in sorted((root / "cores").glob("*.dll")):
+              core = ctypes.CDLL(str(path.resolve()))
+              info = Info()
+              core.retro_get_system_info.argtypes = [ctypes.POINTER(Info)]
+              core.retro_get_system_info(ctypes.byref(info))
+              assert info.name and info.version, path
+              print(path.name, info.name.decode(), info.version.decode())
+          '@ | Set-Content validate.py
+          python validate.py
+          if ($LASTEXITCODE) { throw 'Native core validation failed' }
       - uses: actions/upload-artifact@v4
         with:
           name: RetroBox-Simple-Windows-PRUEBA-NO-COMERCIAL

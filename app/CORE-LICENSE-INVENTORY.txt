@@ -1,0 +1,258 @@
+https://github.com/libretro/libretro-core-info/blob/master/stella_libretro.info
+display_name = "Atari - 2600 (Stella)"
+authors = "Stephen Anthony|Bradford Mott|Eckhard Stolberg|Brian Watson"
+supported_extensions = "a26|bin"
+corename = "Stella"
+license = "GPLv2"
+permissions = ""
+display_version = "6.6"
+categories = "Emulator"
+
+# Hardware Information
+manufacturer = "Atari"
+systemname = "Atari 2600"
+systemid = "atari_2600"
+
+# Libretro Features
+database = "Atari - 2600"
+supports_no_game = "false"
+savestate = "true"
+savestate_features = "deterministic"
+cheats = "false"
+input_descriptors = "true"
+memory_descriptors = "true"
+libretro_saves = "false"
+core_options = "false"
+load_subsystem = "false"
+hw_render = "false"
+needs_fullpath = "false"
+disk_control = "false"
+
+description = "A port of Stella, the multi-platform Atari 2600 VCS emulator, to libretro. This core has high accuracy and wide compatibility with the Atari 2600 library, making it an excellent first choice for users wanting to play these games. On devices that are too weak to maintain full speed, the older Stella2014 core runs significantly faster at the cost of significantly lower accuracy."
+
+
+https://github.com/libretro/libretro-core-info/blob/master/fceumm_libretro.info
+# Software Information
+display_name = "Nintendo - NES / Famicom (FCEUmm)"
+authors = "FCEU Team|CaH4e3"
+supported_extensions = "fds|nes|unif|unf"
+corename = "FCEUmm"
+license = "GPLv2"
+permissions = ""
+display_version = "SVN"
+categories = "Emulator"
+
+# Hardware Information
+manufacturer = "Nintendo"
+systemname = "Nintendo Entertainment System"
+systemid = "nes"
+
+# Libretro Features
+supports_no_game = "false"
+savestate = "true"
+savestate_features = "deterministic"
+cheats = "true"
+input_descriptors = "true"
+memory_descriptors = "true"
+libretro_saves = "true"
+core_options = "true"
+core_options_version = "1.0"
+load_subsystem = "false"
+hw_render = "false"
+needs_fullpath = "false"
+disk_control = "false"
+database = "Nintendo - Nintendo Entertainment System|Nintendo - Family Computer Disk System"
+
+# BIOS / Firmware
+firmware_count = 3
+firmware0_desc = "disksys.rom (Family Computer Disk System BIOS)"
+firmware0_path = "disksys.rom"
+firmware0_opt = "true"
+firmware1_desc = "nes.pal (custom NES Palette)"
+firmware1_path = "nes.pal"
+firmware1_opt = "true"
+firmware2_desc = "gamegenie.nes (Game Genie add-on cartridge)"
+firmware2_path = "gamegenie.nes"
+firmware2_opt = "true"
+notes = "(!) disksys.rom (md5): ca30b50f880eb660a320674ed365ef7a|(!) gamegenie.nes (md5): 7f98d77d7a094ad7d069b74bd553ec98|(!) nes.pal must be located in system directory."
+
+description = "FCEUmm libretro is based on the FCEUmm (mappers modified) fork of the FCEU emulator. It is very fast and supports many mappers, including those for weird, obscure bootleg carts. It is tightly integrated with libretro features, which makes it a good choice for users seeking advanced frontend functionality, such as runahead and rollback netplay. While most NES emulators are lightweight, FCEUmm's particularly low resource requirements make it a good option for mobile, low-power/embedded and console targets."
+
+
+https://github.com/libretro/libretro-core-info/blob/master/bsnes_libretro.info
+# Software Information
+display_name = "Nintendo - SNES / SFC (bsnes)"
+categories = "Emulator"
+authors = "Near"
+corename = "bsnes"
+supported_extensions = "smc|sfc|swc|fig|gb|gbc|bs"
+license = "GPLv3"
+permissions = ""
+display_version = "115"
+
+# Hardware Information
+manufacturer = "Nintendo"
+systemname = "Super Nintendo Entertainment System"
+systemid = "super_nes"
+
+# BIOS / Firmware
+firmware_count = 20
+firmware0_desc = "dsp1.data.rom"
+firmware0_path = "dsp1.data.rom"
+firmware0_opt = "true"
+firmware1_desc = "dsp1.program.rom"
+firmware1_path = "dsp1.program.rom"
+firmware1_opt = "true"
+firmware2_desc = "dsp1b.data.rom"
+firmware2_path = "dsp1b.data.rom"
+firmware2_opt = "true"
+firmware3_desc = "dsp1b.program.rom"
+firmware3_path = "dsp1b.program.rom"
+firmware3_opt = "true"
+firmware4_desc = "dsp2.data.rom"
+firmware4_path = "dsp2.data.rom"
+firmware4_opt = "true"
+firmware5_desc = "dsp2.program.rom"
+firmware5_path = "dsp2.program.rom"
+firmware5_opt = "true"
+firmware6_desc = "dsp3.data.rom"
+firmware6_path = "dsp3.data.rom"
+firmware6_opt = "true"
+firmware7_desc = "dsp3.program.rom"
+firmware7_path = "dsp3.program.rom"
+firmware7_opt = "true"
+firmware8_desc = "dsp4.data.rom"
+firmware8_path = "dsp4.data.rom"
+firmware8_opt = "true"
+firmware9_desc = "dsp4.program.rom"
+firmware9_path = "dsp4.program.rom"
+firmware9_opt = "true"
+firmware10_desc = "cx4.data.rom"
+firmware10_path = "cx4.data.rom"
+firmware10_opt = "true"
+firmware11_desc = "st010.data.rom"
+firmware11_path = "st010.data.rom"
+firmware11_opt = "true"
+firmware12_desc = "st010.program.rom"
+firmware12_path = "st010.program.rom"
+firmware12_opt = "true"
+firmware13_desc = "st011.data.rom"
+firmware13_path = "st011.data.rom"
+firmware13_opt = "true"
+firmware14_desc = "st011.program.rom"
+firmware14_path = "st011.program.rom"
+firmware14_opt = "true"
+firmware15_desc = "st018.data.rom"
+firmware15_path = "st018.data.rom"
+firmware15_opt = "true"
+firmware16_desc = "st018.program.rom"
+firmware16_path = "st018.program.rom"
+firmware16_opt = "true"
+firmware17_desc = "SGB1.sfc (SGB Boot Image)"
+firmware17_path = "SGB1.sfc"
+firmware17_opt = "true"
+firmware18_desc = "SGB2.sfc (SGB Boot Image)"
+firmware18_path = "SGB2.sfc"
+firmware18_opt = "true"
+firmware19_desc = "BS-X.bin (BS-X - Sore wa Namae o Nusumareta Machi no Monogatari (Japan) (Rev 1))"
+firmware19_path = "BS-X.bin"
+firmware19_opt = "true"
+notes = "[1] bsnes uses split ROMS for special chip games.|[*] Notable DSP1/DSP1B Games: Super Mario Kart,  Pilotwings|[*] Notable DSP2 Games: Dungeon Master|[*] Notable DSP3 Games: SD Gundam GX|[*] Notable DSP4 Games: Top Gear 3000|[*] Notable Cx4 Games: Mega Man X2,  Mega Man X3|[2] SGB Emulation needs No-Intro Super Game Boy ROMs renamed to SGB1.sfc or SGB2.sfc|(!) SGB1.sfc (md5): b15ddb15721c657d82c5bab6db982ee9|(!) SGB2.sfc (md5): 8ecd73eb4edf7ed7e81aef1be80031d5|[3] To start BS-X games from the RPG-like interface, go back into the house and select the 1st option.|(!) BS-X.bin (md5): fed4d8242cfbed61343d53d48432aced"
+
+# Libretro Features
+savestate = "true"
+savestate_features = "serialized"
+cheats = "false"
+input_descriptors = "true"
+memory_descriptors = "false"
+libretro_saves = "true"
+core_options = "true"
+core_options_version = "1.0"
+load_subsystem = "true"
+supports_no_game = "false"
+database = "Nintendo - Super Nintendo Entertainment System|Nintendo - Sufami Turbo|Nintendo - Satellaview"
+hw_render = "false"
+needs_fullpath = "false"
+disk_control = "false"
+
+description = "bsnes libretro core is based on the latest source code from the bsnes emulator, which is known for its high accuracy and faithful reproduction of the SNES/SFC console. In addition to high accuracy, this version also includes a number of enhancements, such as mode 7 upscaling and overclocking for the Super FX add-on chip used in Star Fox and other games. This core is a good option for users on desktop platforms (Windows, Mac and Linux) with a relatively fast CPU. While it lacks support for libretro cheats and retro-achievements, it does have its own runahead implementation that is accessible from the core options. This core is not compatible with compressed save files, so be aware of that if you wish to import saves made by another core."
+
+
+https://github.com/libretro/libretro-core-info/blob/master/blastem_libretro.info
+# Software Information
+display_name = "Sega - MS/GG/MD/CD/32X (BlastEm)"
+authors = "Mike Pavone"
+supported_extensions = "md|gen|smd|68k|sgd|32x|sms|gg|sg|sg1|sc|sc3|sf7|col|cue|toc|iso|chd|vgm|vgz|flac|wav|bin|rom|gz"
+corename = "BlastEm"
+license = "GPLv3"
+permissions = ""
+display_version = "v0.6.3-pre"
+categories = "Emulator"
+
+# Hardware Information
+manufacturer = "Sega"
+systemid = "mega_drive"
+systemname = "Sega 8/16-bit (Various)"
+
+# Libretro Features
+database = "Sega - 32X|Sega - Game Gear|Sega - Master System - Mark III|Sega - Mega Drive - Genesis|Sega - Mega-CD - Sega CD|Sega - PICO|Sega - SG-1000"
+supports_no_game = "false"
+savestate = "true"
+savestate_features = "serialized"
+cheats = "false"
+input_descriptors = "true"
+memory_descriptors = "false"
+libretro_saves = "true"
+core_options = "true"
+core_options_version = "0"
+load_subsystem = "false"
+hw_render = "false"
+needs_fullpath = "true"
+disk_control = "false"
+is_experimental = "false"
+
+# BIOS/Firmware
+firmware_count = 1
+
+firmware0_desc = "rom.db (ROM feature database)"
+firmware0_path = "rom.db"
+firmware0_opt = "true"
+
+notes = "(!) rom.db (sha1): E5414FB1C4CC7D7F5101C07E4547316779BA3D97"
+
+description = "A port of the BlastEm emulator to libretro, covering the Sega Genesis/Mega Drive, Sega CD, 32X, Master System, Game Gear, SG-1000, SC-3000, Pico and Copera. This emulator is focused on being both extremely accurate and extremely fast. While it is not as mature as Genesis Plus GX, its extreme accuracy makes it capable of running many demos and test ROMs that choke other emulators, including the notoriously complex Titan Overdrive I and II demos."
+
+
+https://github.com/libretro/libretro-core-info/blob/master/mame_libretro.info
+# Software Information
+display_name = "Arcade (MAME)"
+categories = "Emulator"
+authors = "MAMEdev"
+supported_extensions = "cmd|zip|7z"
+corename = "MAME"
+license = "GPLv2+"
+permissions = ""
+display_version = "Git"
+
+# Hardware Information
+manufacturer = "Various"
+systemname = "Arcade (various)"
+systemid = "mame"
+
+# Libretro Features
+supports_no_game = "false"
+database = "MAME"
+savestate = "true"
+savestate_features = "deterministic"
+cheats = "false"
+input_descriptors = "false"
+memory_descriptors = "false"
+libretro_saves = "false"
+core_options = "true"
+core_options_version = "1.0"
+hw_render = "false"
+disk_control = "false"
+database_match_archive_member = "true"
+notes = "[1] MAME supports MAME save states.|[2] MAME supports extracted MAME cheats.|[3] The BIOS files can be inside the ROM directory|[^] or 'SYSTEMDIR\mame\bios' or 'SYSTEMDIR\mame\roms' directory.|[4] CHD files and their directories must be inside the ROM directory.|[5] ARTWORK, CHEATS, HASH, INI and SAMPLES directories can be placed|[^] inside the 'SYSTEMDIR\mame' directory. (INI/Source for drivers)|[6] When saving, the following directories will be created in the 'SAVEDIR\mame'|[^] directory: STATES, NVRAM, INPUT, SNAPS, CFG, MEMCARD, and DIFF.|[7] Default combo to call MAME GUI: Retropad Select + X|[^] Retropad Select + Start => CANCEL"
+
+description = "'MAME - Current' is compatible with the latest MAME ROM sets. MAME is the most compatible emulator in the world, and it can run almost any game from any platform (though running console games through this core requires additional steps). Its high compatibility makes it a good option for most users. If you cannot run this core full speed, the year-stamped forks are faster at the cost of reduced accuracy, but FBNeo is typically a better choice for speed vs accuracy, as long as it supports the game(s) in question."

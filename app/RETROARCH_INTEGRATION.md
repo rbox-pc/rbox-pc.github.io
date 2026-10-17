@@ -20,8 +20,10 @@ No se incluyen ROMs ni BIOS.
 ## Tamaño y licencias
 Se eliminan bases de datos, temas, shaders, overlays y herramientas de depuración.
 El tamaño real queda en PACKAGE-SIZE.txt; no se promete una cifra sin medir.
-La prueba usa los cinco cores del paquete de referencia para aislar problemas de interfaz.
-Snes9x2010, Genesis Plus GX y FBNeo requieren revisión/reemplazo antes de vender.
+Selección: Stella (GPLv2), FCEUmm (GPLv2), bsnes (GPLv3), BlastEm (GPLv3), MAME (GPLv2+), según libretro-core-info.
+Se reemplazan Snes9x2010, Genesis Plus GX y FBNeo para evitar restricciones no comerciales.
+El usuario solo ha probado NES con FCEUmm; los otros cores seleccionados aún requieren pruebas reales.
+MAME puede aumentar considerablemente el tamaño y exige ROM sets compatibles.
 NO añadir cobros, licencias Turbify o Microsoft Billing a este paquete de prueba.
 RetroArch y los cores conservan sus licencias propias. Una versión comercial necesita inventario,
 avisos y código fuente correspondiente de cada binario; este artefacto no cumple aún esa entrega.

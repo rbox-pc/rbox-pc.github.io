@@ -7,11 +7,11 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
 const bundledCores = <String, String>{
-  'Atari 2600': 'stella2014_libretro.dll',
+  'Atari 2600': 'stella_libretro.dll',
   'NES': 'fceumm_libretro.dll',
-  'SNES': 'snes9x2010_libretro.dll',
-  'Sega Genesis': 'genesis_plus_gx_libretro.dll',
-  'Arcade': 'fbneo_libretro.dll',
+  'SNES': 'bsnes_libretro.dll',
+  'Sega Genesis': 'blastem_libretro.dll',
+  'Arcade': 'mame_libretro.dll',
 };
 
 String configValue(String value) {
@@ -111,7 +111,7 @@ class _RetroArchPlayerState extends State<RetroArchPlayer> {
         'video_windowed_fullscreen': 'true',
         'video_force_aspect': 'true',
         'aspect_ratio_index': '22',
-        'video_scale_integer': 'false',
+        'video_scale_integer': (!_smooth).toString(),
         'video_smooth': _smooth.toString(),
         'input_joypad_driver': '"sdl2"',
         'input_autodetect_enable': 'true',
