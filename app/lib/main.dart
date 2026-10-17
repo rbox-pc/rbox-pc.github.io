@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-import 'libretro_player.dart';
+import 'retroarch_player.dart';
 
 import 'package:archive/archive.dart';
 import 'package:file_picker/file_picker.dart';
@@ -128,6 +128,60 @@ class _RetroBoxHomeState extends State<RetroBoxHome> {
     return !clean.startsWith('/') && !RegExp(r'^[A-Za-z]:').hasMatch(clean) && !clean.split('/').contains('..');
   }
 
+
+  Future<void> _importRom() async {
+    final system = await showDialog<String>(context: context, builder: (context) => SimpleDialog(
+      title: const Text('¿De qué consola es el juego?'),
+      children: _systems.keys.map((name) => SimpleDialogOption(
+        onPressed: () => Navigator.pop(context, name), child: Text(name))).toList(),
+    ));
+    if (system == null) return;
+    final selected = await FilePicker.pickFile(type: FileType.custom, allowedExtensions: _systems[system]!.extensions);
+    if (selected == null) return;
+    try {
+      final root = await _libraryDir();
+      final target = File('${root.path}/roms/$system/${_baseName(selected.path)}');
+      await target.parent.create(recursive: true);
+      await File(selected.path).copy(target.path);
+      final games = [..._games.where((g) => !(g.system == system && g.romPath == target.path)),
+        GameEntry(system: system, title: _stem(selected.path), romPath: target.path)];
+      await _saveLibrary(root, games);
+      if (mounted) setState(() { _games = games; _message = 'Juego importado: ${_stem(selected.path)}'; });
+    } catch (error) {
+      if (mounted) setState(() => _message = 'No se pudo importar: $error');
+    }
+  }
+
+  Future<void> _engineSettings() async {
+    final root = await _libraryDir();
+    final file = File('${root.path}/engine.json');
+    final settings = await file.exists() ? Map<String, dynamic>.from(jsonDecode(await file.readAsString()) as Map) : <String, dynamic>{};
+    if (!mounted) return;
+    await showDialog<void>(context: context, builder: (context) => StatefulBuilder(builder: (context, update) => AlertDialog(
+      title: const Text('Motores e imagen'),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        SwitchListTile(title: const Text('Suavizar imagen'), value: settings['smooth'] as bool? ?? true,
+          onChanged: (value) => update(() => settings['smooth'] = value)),
+        const Text('Se conserva la proporción original. Los juegos antiguos mantienen su resolución original.'),
+        ..._systems.keys.map((system) => TextButton(
+          child: Text('Importar core: $system'),
+          onPressed: () async {
+            final selected = await FilePicker.pickFile(type: FileType.custom, allowedExtensions: ['dll']);
+            if (selected == null) return;
+            final destination = File('${root.path}/cores/${system.replaceAll(' ', '_')}.dll');
+            await destination.parent.create(recursive: true);
+            await File(selected.path).copy(destination.path);
+            final cores = Map<String, dynamic>.from(settings['cores'] as Map? ?? {});
+            cores[system] = destination.path;
+            settings['cores'] = cores;
+            await file.writeAsString(jsonEncode(settings), flush: true);
+          })),
+      ]),
+      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Guardar'))],
+    )));
+    await file.writeAsString(jsonEncode(settings), flush: true);
+  }
+
   Future<void> _importZip() async {
     if (_busy) return;
     final chosen = await FilePicker.pickFile(
@@ -165,7 +219,7 @@ class _RetroBoxHomeState extends State<RetroBoxHome> {
         // Use a stable, sanitized destination name; never trust paths from inside the ZIP.
         final safeName = original.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
         final folder = isBios ? 'bios' : isRom ? 'roms' : isCover ? 'covers' : 'cheats';
-        final destination = File('${root.path}${Platform.pathSeparator}$folder${Platform.pathSeparator}${isBios ? _baseName(original) : safeName}');
+        final destination = File('${root.path}${Platform.pathSeparator}$folder${Platform.pathSeparator}${isBios ? _baseName(original) : isRom ? '$system/${_baseName(original)}' : safeName}');
         await destination.parent.create(recursive: true);
         await destination.writeAsBytes(data, flush: true);
         files[original.toLowerCase()] = destination.path;
@@ -240,6 +294,8 @@ class _RetroBoxHomeState extends State<RetroBoxHome> {
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const Text('RetroBox'), centerTitle: true, actions: [
+          IconButton(tooltip: 'Motores e imagen', onPressed: _engineSettings, icon: const Icon(Icons.settings)),
+          IconButton(tooltip: 'Importar ROM', onPressed: _busy ? null : _importRom, icon: const Icon(Icons.add)),
           IconButton(tooltip: 'Import ZIP', onPressed: _busy ? null : _importZip, icon: const Icon(Icons.folder_zip_outlined)),
         ]),
         body: ListView(padding: const EdgeInsets.all(18), children: [
@@ -247,6 +303,7 @@ class _RetroBoxHomeState extends State<RetroBoxHome> {
           const SizedBox(height: 8),
           const Text('Choose a console to view its game library.', style: TextStyle(color: Colors.white70)),
           const SizedBox(height: 18),
+          FilledButton.icon(onPressed: _busy ? null : _importRom, icon: const Icon(Icons.add), label: const Text('Importar un juego')),
           FilledButton.icon(onPressed: _busy ? null : _importZip, icon: const Icon(Icons.file_upload_outlined), label: Text(_busy ? 'Importing...' : 'Import games ZIP')),
           if (_message != null) Padding(padding: const EdgeInsets.symmetric(vertical: 10), child: Text(_message!, style: const TextStyle(color: Colors.white70))),
           const SizedBox(height: 10),
@@ -285,7 +342,7 @@ class GameLibraryScreen extends StatelessWidget {
                         : const Icon(Icons.videogame_asset, size: 38),
                     title: Text(game.title),
                     subtitle: Text('ROM imported${game.cheatPath != null ? ' · Cheats found' : ''}'),
-                    onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => LibretroPlayer(title: game.title, romPath: game.romPath, system: game.system))),
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => RetroArchPlayer(title: game.title, romPath: game.romPath, system: game.system))),
                   );
                 },
               ),

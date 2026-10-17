@@ -1,0 +1,74 @@
+name: RetroBox simple - RetroArch engine
+on:
+  push:
+    branches: [retrobox-retroarch]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+      - name: Dependencies and analysis
+        working-directory: app
+        run: |
+          flutter pub get
+          flutter analyze --no-fatal-infos --no-fatal-warnings
+      - name: Build frontend
+        working-directory: app
+        run: flutter build windows --release
+      - name: Download reference engine and five test cores
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          curl.exe -fL --retry 3 https://buildbot.libretro.com/stable/1.22.2/windows/x86_64/RetroArch.7z -o engine.7z
+          if ($LASTEXITCODE) { throw 'Engine download failed' }
+          curl.exe -fL --retry 3 https://buildbot.libretro.com/stable/1.22.2/windows/x86_64/RetroArch_cores.7z -o cores.7z
+          if ($LASTEXITCODE) { throw 'Core download failed' }
+          7z x engine.7z -oengine-full -y | Out-Null
+          if ($LASTEXITCODE) { throw 'Engine extraction failed' }
+          $exe = @(Get-ChildItem engine-full -Filter retroarch.exe -Recurse)
+          if ($exe.Count -ne 1) { throw 'Expected one RetroArch executable' }
+          $source = $exe[0].Directory.FullName
+          $release = 'app/build/windows/x64/runner/Release'
+          $engine = "$release/engine"
+          New-Item -ItemType Directory -Force "$engine/cores" | Out-Null
+          Copy-Item "$source/retroarch.exe" $engine
+          # Keep runtime DLLs; discard themes, databases, shaders, overlays and debug tools.
+          Copy-Item "$source/*.dll" $engine
+          Get-ChildItem $source -File | Where-Object { $_.Name -match 'COPYING|LICENSE' } | Copy-Item -Destination $engine
+          $cores = @('stella2014_libretro.dll','fceumm_libretro.dll','snes9x2010_libretro.dll','genesis_plus_gx_libretro.dll','fbneo_libretro.dll')
+          foreach ($core in $cores) {
+            7z e cores.7z "-o$engine/cores" $core -r -y | Out-Null
+            if ($LASTEXITCODE -or !(Test-Path "$engine/cores/$core")) { throw "Missing core $core" }
+          }
+          Copy-Item app/RETROARCH_INTEGRATION.md "$release/LEEME-PRUEBA.md"
+          Get-ChildItem $engine -Recurse -File | Get-FileHash -Algorithm SHA256 | Format-Table -AutoSize | Out-File "$release/ENGINE-HASHES.txt"
+          $bytes = (Get-ChildItem $release -Recurse -File | Measure-Object Length -Sum).Sum
+          "Uncompressed bytes: $bytes" | Tee-Object -FilePath "$release/PACKAGE-SIZE.txt"
+      - uses: actions/checkout@v4
+        with:
+          repository: libretro/retroarch-joypad-autoconfig
+          path: controller-profiles
+      - name: Include controller profiles
+        shell: pwsh
+        run: |
+          $destination = 'app/build/windows/x64/runner/Release/engine/autoconfig'
+          New-Item -ItemType Directory -Force $destination | Out-Null
+          foreach ($driver in @('sdl2','xinput','dinput')) {
+            Copy-Item "controller-profiles/$driver" $destination -Recurse
+          }
+          if (!(Test-Path "$destination/sdl2/Nintendo Switch Pro Controller.cfg")) { throw 'Switch profile missing' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RetroBox-Simple-Windows-PRUEBA-NO-COMERCIAL
+          path: app/build/windows/x64/runner/Release/
+          if-no-files-found: error
+          retention-days: 14
