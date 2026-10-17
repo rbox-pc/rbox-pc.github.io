@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'windows_controls.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -23,7 +24,9 @@ String configValue(String value) {
 
 class RetroArchPlayer extends StatefulWidget {
   final String title, romPath, system;
-  const RetroArchPlayer({super.key, required this.title, required this.romPath, required this.system});
+  final String? cheatPath;
+  final bool spanish;
+  const RetroArchPlayer({super.key, required this.title, required this.romPath, required this.system, this.cheatPath, this.spanish = true});
   @override
   State<RetroArchPlayer> createState() => _RetroArchPlayerState();
 }
@@ -36,11 +39,18 @@ class _RetroArchPlayerState extends State<RetroArchPlayer> {
   bool _starting = true;
   bool _smooth = true;
   String? _engineOverride;
+  final _windows = GameWindows();
+  StreamSubscription<PadEvent>? _padEvents;
+  bool _exitVisible = false, _paused = false;
+  DateTime? _lastStart;
+  File? _autoState;
+  String tr(String en, String es) => widget.spanish ? es : en;
 
   @override
   void initState() {
     super.initState();
-    _launch();
+    _padEvents = WindowsControls.instance.events.stream.listen(_onPad);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _launch());
   }
 
   Future<Directory> _root() async {
@@ -74,7 +84,7 @@ class _RetroArchPlayerState extends State<RetroArchPlayer> {
     final root = await _root();
     final destination = File('${root.path}/cores/${widget.system.replaceAll(' ', '_')}.dll');
     await destination.parent.create(recursive: true);
-    await File(selected.path).copy(destination.path);
+    await File(selected.path!).copy(destination.path);
     final settings = await _settings(root);
     final cores = Map<String, dynamic>.from(settings['cores'] as Map? ?? {});
     cores[widget.system] = destination.path;
@@ -103,6 +113,33 @@ class _RetroArchPlayerState extends State<RetroArchPlayer> {
       for (final name in ['saves', 'states', 'bios', 'logs']) {
         await Directory('${root.path}/$name').create(recursive: true);
       }
+      final filename = widget.romPath.replaceAll('\\','/').split('/').last;
+      final dot = filename.lastIndexOf('.');
+      final stem = dot > 0 ? filename.substring(0,dot) : filename;
+      final statePath = '${root.path}/states/${widget.system}/$stem.state';
+      _autoState = File('$statePath.auto');
+      var resume = false;
+      if (await _autoState!.exists() && mounted) {
+        resume = await showDialog<bool>(context: context,builder: (context) => AlertDialog(
+          title: Text(widget.title), content: Text(tr('Continue saved game?', '¿Continuar la partida guardada?')),
+          actions: [TextButton(onPressed: () => Navigator.pop(context,false), child: Text(tr('NEW GAME','NUEVA PARTIDA'))), TextButton(onPressed: () => Navigator.pop(context,true), child: Text(tr('CONTINUE','CONTINUAR')))],
+        )) ?? false;
+      }
+      final cheatDir = Directory('${root.path}/active-cheats');
+      if (await cheatDir.exists()) await cheatDir.delete(recursive:true);
+      final cheat = widget.cheatPath;
+      if (cheat != null) {
+        if (!cheat.toLowerCase().endsWith('.cht')) throw const FormatException('Este core necesita trucos en formato RetroArch .cht. El archivo original permanece importado.');
+        final identities = File('${engine.parent.path}/CORE_IDENTITIES.json');
+        if (!await identities.exists()) throw const FileSystemException('Faltan los datos de identificación del core para cargar trucos.');
+        final metadata = jsonDecode(await identities.readAsString()) as Map<String,dynamic>;
+        final coreName = metadata[core.path.replaceAll('\\','/').split('/').last] as String?;
+        if (coreName == null || coreName.contains('/') || coreName.contains('\\')) throw const FormatException('Core importado sin identidad de trucos. Usa F1 para cargar su archivo de trucos.');
+        final target = File('${cheatDir.path}/$coreName/$stem.cht');
+        await target.parent.create(recursive:true);
+        await File(cheat).copy(target.path);
+      }
+
       // CLI paths are individual arguments. Never invoke a command shell.
       final config = File('${root.path}/session.cfg');
       final values = <String, String>{
@@ -115,8 +152,8 @@ class _RetroArchPlayerState extends State<RetroArchPlayer> {
         'video_smooth': _smooth.toString(),
         'input_joypad_driver': '"sdl2"',
         'input_autodetect_enable': 'true',
-        'input_exit_emulator': '"escape"',
-        'input_quit_gamepad_combo': '9',
+        'input_exit_emulator': '"nul"',
+        'input_quit_gamepad_combo': '0',
         'quit_press_twice': 'false',
         'stdin_cmd_enable': 'true',
         'network_cmd_enable': 'false',
@@ -129,19 +166,31 @@ class _RetroArchPlayerState extends State<RetroArchPlayer> {
         'system_directory': configValue('${root.path}/bios'),
         'joypad_autoconfig_dir': configValue('${engine.parent.path}/autoconfig'),
         'autosave_interval': '10',
+        'state_slot': '-1',
+        'savestate_auto_save': 'false',
+        'savestate_auto_load': resume.toString(),
+        'savestate_file_compression': 'true',
+        'sort_savestates_enable': 'false',
+        'sort_savefiles_enable': 'false',
+        'sort_savestates_by_content_enable': 'false',
+        'sort_savefiles_by_content_enable': 'false',
+        'cheat_database_path': configValue('${root.path}/active-cheats'),
+        'apply_cheats_after_load': (widget.cheatPath != null).toString(),
       };
       await Directory('${root.path}/saves/${widget.system}').create(recursive: true);
       await Directory('${root.path}/states/${widget.system}').create(recursive: true);
       await config.writeAsString(values.entries.map((e) => '${e.key} = ${e.value}').join('\n'), flush: true);
       final log = File('${root.path}/logs/last-session.log').openWrite();
       _log = log;
+      _windows.captureLibrary();
       final process = await Process.start(engine.path,
-          ['--verbose', '--config', config.path, '-L', core.path, widget.romPath],
+          ['--verbose', '--config', config.path, '-S', statePath, '-L', core.path, widget.romPath],
           workingDirectory: engine.parent.path);
       _process = process;
+      Timer(const Duration(seconds: 2), () { if (_process == process) _windows.findGame(process.pid); });
       final output = process.stdout.listen(log.add).asFuture<void>();
       final errors = process.stderr.listen(log.add).asFuture<void>();
-      if (mounted) setState(() { _running = true; _starting = false; _status = 'Jugando. Esc o Select + abajo para volver.'; });
+      if (mounted) setState(() { _running = true; _starting = false; _status = 'Jugando. Select + abajo abre el menú de salida.'; });
       final code = await process.exitCode;
       await output;
       await errors;
@@ -172,6 +221,82 @@ class _RetroArchPlayerState extends State<RetroArchPlayer> {
   }
 
   @override
+  void dispose() {
+    _padEvents?.cancel();
+    super.dispose();
+  }
+
+  void _onPad(PadEvent event) {
+    if (!_running && ModalRoute.of(context)?.isCurrent == true) return;
+    if (_exitVisible || !_running) {
+      final focus = FocusManager.instance.primaryFocus;
+      if (event.button == 11) focus?.previousFocus();
+      if (event.button == 12) focus?.nextFocus();
+      if ([0,6].contains(event.button) && focus?.context != null) Actions.maybeInvoke(focus!.context!, const ActivateIntent());
+      return;
+    }
+    if (event.exitCombo) { _exitMenu(); return; }
+    if (event.button == 6) {
+      final now = DateTime.now();
+      if (_lastStart != null && now.difference(_lastStart!).inMilliseconds <= 500) {
+        _lastStart = null;
+        _command('PAUSE_TOGGLE');
+        _paused = !_paused;
+      } else { _lastStart = now; }
+    }
+  }
+
+  Future<void> _command(String command) async {
+    _process?.stdin.writeln(command);
+    await _process?.stdin.flush();
+  }
+
+  Future<void> _exitMenu() async {
+    if (!_running || _exitVisible) return;
+    _exitVisible = true;
+    final wasPaused = _paused;
+    if (!wasPaused) { await _command('PAUSE_TOGGLE'); _paused = true; }
+    final process = _process;
+    if (process != null) _windows.findGame(process.pid);
+    _windows.showLibrary();
+    if (!mounted) return;
+    final choice = await showDialog<int>(context: context, barrierDismissible: false, builder: (context) => AlertDialog(
+      title: Text(tr('EXIT GAME', 'SALIR DEL JUEGO')),
+      content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        TextButton(onPressed: () => Navigator.pop(context,0), child: Text(tr('Save & Exit','Guardar y salir'))),
+        TextButton(autofocus: true,onPressed: () => Navigator.pop(context,1), child: Text(tr('Exit Without Saving','Salir sin guardar'))),
+        TextButton(onPressed: () => Navigator.pop(context,2), child: Text(tr('Cancel','Cancelar'))),
+      ]),
+    ));
+    if (choice == 0) {
+      final state = _autoState!;
+      final before = await state.exists() ? await state.lastModified() : null;
+      await _command('SAVE_STATE');
+      var saved = false;
+      for (var i = 0; i < 100 && _running; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        if (await state.exists()) {
+          final modified = await state.lastModified();
+          if (before == null || modified.isAfter(before)) { saved = true; break; }
+        }
+      }
+      if (!saved) {
+        if (mounted) setState(() => _status = tr('Save was not confirmed. The game remains open.','No se confirmó el guardado. La partida sigue abierta.'));
+        _exitVisible = false;
+        if (!wasPaused) { await _command('PAUSE_TOGGLE'); _paused = false; }
+        _windows.showGame();
+        return;
+      }
+      await _quit();
+    } else if (choice == 1) { await _quit(); }
+    else {
+      if (!wasPaused) { await _command('PAUSE_TOGGLE'); _paused = false; }
+      _windows.showGame();
+    }
+    _exitVisible = false;
+  }
+
+  @override
   Widget build(BuildContext context) => PopScope(
     canPop: !_running && !_starting,
     child: Scaffold(
@@ -184,10 +309,10 @@ class _RetroArchPlayerState extends State<RetroArchPlayer> {
             const SizedBox(height: 20),
             Text(_status, textAlign: TextAlign.center),
             const SizedBox(height: 20),
-            const Text('Salir: Esc · Mando: Select + abajo\nGuardar estado: F2 · Cargar estado: F4\nMenú avanzado: F1', textAlign: TextAlign.center),
+            const Text('Menú de salida: Select + abajo · Start dos veces: pausa\nGuardar estado: F2 · Cargar estado: F4\nMenú avanzado: F1', textAlign: TextAlign.center),
             SwitchListTile(title: const Text('Suavizar imagen'), subtitle: const Text('Se aplica al iniciar la siguiente partida.'), value: _smooth,
               onChanged: _running || _starting ? null : (value) => setState(() => _smooth = value)),
-            if (_running) FilledButton.icon(onPressed: _quit, icon: const Icon(Icons.home), label: const Text('Volver a la biblioteca')),
+            if (_running) FilledButton.icon(onPressed: _exitMenu, icon: const Icon(Icons.home), label: const Text('Volver a la biblioteca')),
             if (!_running && !_starting) ...[
               FilledButton(onPressed: _launch, child: const Text('Jugar')),
               TextButton(onPressed: _chooseEngine, child: const Text('Seleccionar motor RetroArch')),

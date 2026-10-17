@@ -1,13 +1,24 @@
+import 'dart:async';
+import 'dart:typed_data';
 import 'dart:convert';
 import 'dart:io';
 import 'retroarch_player.dart';
+import 'windows_controls.dart';
+import 'package:flutter/services.dart';
 
 import 'package:archive/archive.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
-void main() => runApp(const RetroBoxApp());
+part 'android_home.dart';
+part 'android_settings.dart';
+
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  WindowsControls.instance.start();
+  runApp(const RetroBoxApp());
+}
 
 const _systems = <String, ({String subtitle, IconData icon, List<String> extensions})>{
   'Atari 2600': (subtitle: 'Classic Atari games', icon: Icons.sports_esports, extensions: ['a26', 'bin']),
@@ -24,9 +35,9 @@ class RetroBoxApp extends StatelessWidget {
   Widget build(BuildContext context) => MaterialApp(
         title: 'RetroBox',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData.dark(useMaterial3: true).copyWith(
-          scaffoldBackgroundColor: const Color(0xFF101219),
-          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF65B4FF), brightness: Brightness.dark),
+        theme: ThemeData(brightness: Brightness.dark, useMaterial3: true, fontFamily: 'RetroBoxSans').copyWith(
+          scaffoldBackgroundColor: const Color(0xFF0B0D10),
+          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF46C2FF), brightness: Brightness.dark),
         ),
         home: const RetroBoxHome(),
       );
@@ -63,11 +74,25 @@ class _RetroBoxHomeState extends State<RetroBoxHome> {
   List<GameEntry> _games = [];
   bool _busy = false;
   String? _message;
+  int _current = 0, _selected = 0;
+  bool _inGames = false, _spanish = true, _music = true, _playing = false;
+  final _carousel = ScrollController();
+  StreamSubscription<PadEvent>? _padEvents;
 
   @override
   void initState() {
     super.initState();
     _loadLibrary();
+    _loadPreferences();
+    _padEvents = WindowsControls.instance.events.stream.listen(_pad);
+  }
+
+  @override
+  void dispose() {
+    _padEvents?.cancel();
+    _carousel.dispose();
+    MenuMusic.stop();
+    super.dispose();
   }
 
   Future<Directory> _libraryDir() async {
@@ -129,69 +154,39 @@ class _RetroBoxHomeState extends State<RetroBoxHome> {
   }
 
 
-  Future<void> _importRom() async {
+  Future<void> _importRom([String? suppliedPath]) async {
     final system = await showDialog<String>(context: context, builder: (context) => SimpleDialog(
       title: const Text('¿De qué consola es el juego?'),
       children: _systems.keys.map((name) => SimpleDialogOption(
         onPressed: () => Navigator.pop(context, name), child: Text(name))).toList(),
     ));
     if (system == null) return;
-    final selected = await FilePicker.pickFile(type: FileType.custom, allowedExtensions: _systems[system]!.extensions);
-    if (selected == null) return;
+    final selected = suppliedPath == null ? await FilePicker.pickFile(type: FileType.custom, allowedExtensions: _systems[system]!.extensions) : null;
+    final selectedPath = suppliedPath ?? selected?.path;
+    if (selectedPath == null) return;
     try {
       final root = await _libraryDir();
-      final target = File('${root.path}/roms/$system/${_baseName(selected.path)}');
+      final target = File('${root.path}/roms/$system/${_baseName(selectedPath)}');
       await target.parent.create(recursive: true);
-      await File(selected.path).copy(target.path);
+      await File(selectedPath).copy(target.path);
       final games = [..._games.where((g) => !(g.system == system && g.romPath == target.path)),
-        GameEntry(system: system, title: _stem(selected.path), romPath: target.path)];
+        GameEntry(system: system, title: _stem(selectedPath), romPath: target.path)];
       await _saveLibrary(root, games);
-      if (mounted) setState(() { _games = games; _message = 'Juego importado: ${_stem(selected.path)}'; });
+      if (mounted) setState(() { _games = games; _message = 'Juego importado: ${_stem(selectedPath)}'; });
     } catch (error) {
       if (mounted) setState(() => _message = 'No se pudo importar: $error');
     }
   }
 
-  Future<void> _engineSettings() async {
-    final root = await _libraryDir();
-    final file = File('${root.path}/engine.json');
-    final settings = await file.exists() ? Map<String, dynamic>.from(jsonDecode(await file.readAsString()) as Map) : <String, dynamic>{};
-    if (!mounted) return;
-    await showDialog<void>(context: context, builder: (context) => StatefulBuilder(builder: (context, update) => AlertDialog(
-      title: const Text('Motores e imagen'),
-      content: Column(mainAxisSize: MainAxisSize.min, children: [
-        SwitchListTile(title: const Text('Suavizar imagen'), value: settings['smooth'] as bool? ?? true,
-          onChanged: (value) => update(() => settings['smooth'] = value)),
-        const Text('Se conserva la proporción original. Los juegos antiguos mantienen su resolución original.'),
-        ..._systems.keys.map((system) => TextButton(
-          child: Text('Importar core: $system'),
-          onPressed: () async {
-            final selected = await FilePicker.pickFile(type: FileType.custom, allowedExtensions: ['dll']);
-            if (selected == null) return;
-            final destination = File('${root.path}/cores/${system.replaceAll(' ', '_')}.dll');
-            await destination.parent.create(recursive: true);
-            await File(selected.path).copy(destination.path);
-            final cores = Map<String, dynamic>.from(settings['cores'] as Map? ?? {});
-            cores[system] = destination.path;
-            settings['cores'] = cores;
-            await file.writeAsString(jsonEncode(settings), flush: true);
-          })),
-      ]),
-      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Guardar'))],
-    )));
-    await file.writeAsString(jsonEncode(settings), flush: true);
-  }
+  Future<void> _engineSettings() => _androidSettings();
 
-  Future<void> _importZip() async {
+  Future<void> _importZip([Uint8List? suppliedBytes]) async {
     if (_busy) return;
-    final chosen = await FilePicker.pickFile(
-      type: FileType.custom,
-      allowedExtensions: ['zip'],
-    );
-    if (chosen == null) return;
+    final chosen = suppliedBytes == null ? await FilePicker.pickFile(type: FileType.custom, allowedExtensions: ['zip']) : null;
+    if (chosen == null && suppliedBytes == null) return;
     setState(() { _busy = true; _message = 'Importing ZIP...'; });
     try {
-      final bytes = await chosen.readAsBytes();
+      final bytes = suppliedBytes ?? await chosen!.readAsBytes();
       if (bytes.length > 500 * 1024 * 1024) throw const FormatException('ZIP exceeds 500 MB demo limit');
       final archive = ZipDecoder().decodeBytes(bytes);
       final root = await _libraryDir();
@@ -209,19 +204,28 @@ class _RetroBoxHomeState extends State<RetroBoxHome> {
         final isCover = ['png', 'jpg', 'jpeg', 'webp'].contains(ext);
         final isCheat = ['cht', 'ini', 'xml', 'json'].contains(ext) && (lower.contains('cheat') || ext == 'cht');
         final system = _systemFor(original);
-        final isBios = lower.split('/').contains('bios') && ['bin', 'rom', 'zip'].contains(ext);
+        final isBios = (lower.split('/').contains('bios') || _baseName(lower) == 'neogeo.zip') && ['bin', 'rom', 'zip'].contains(ext);
+        final coreSystem = ext == 'dll' && (lower.contains('/cores/') || lower.startsWith('cores/') || lower.contains('/emulators/') || lower.startsWith('emulators/')) ? _coreSystemFor(lower) : null;
+        final isCore = coreSystem != null;
         final isRom = !isBios && system != null && _systems[system]!.extensions.contains(ext);
-        if (!isCover && !isCheat && !isRom && !isBios) { skipped++; continue; }
+        if (!isCover && !isCheat && !isRom && !isBios && !isCore) { skipped++; continue; }
         extractedBytes += item.size;
         if (extractedBytes > 1024 * 1024 * 1024) throw const FormatException('Extracted content exceeds 1 GB demo limit');
         final data = item.readBytes();
         if (data == null) { skipped++; continue; }
         // Use a stable, sanitized destination name; never trust paths from inside the ZIP.
         final safeName = original.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
-        final folder = isBios ? 'bios' : isRom ? 'roms' : isCover ? 'covers' : 'cheats';
+        final folder = isCore ? 'cores' : isBios ? 'bios' : isRom ? 'roms' : isCover ? 'covers' : 'cheats';
         final destination = File('${root.path}${Platform.pathSeparator}$folder${Platform.pathSeparator}${isBios ? _baseName(original) : isRom ? '$system/${_baseName(original)}' : safeName}');
         await destination.parent.create(recursive: true);
         await destination.writeAsBytes(data, flush: true);
+        if (isCore) {
+          final settingsFile = File('${root.path}/engine.json');
+          final settings = await settingsFile.exists() ? Map<String,dynamic>.from(jsonDecode(await settingsFile.readAsString()) as Map) : <String,dynamic>{};
+          final cores = Map<String,dynamic>.from(settings['cores'] as Map? ?? {});
+          cores[coreSystem!] = destination.path; settings['cores'] = cores;
+          await settingsFile.writeAsString(jsonEncode(settings), flush: true);
+        }
         files[original.toLowerCase()] = destination.path;
         if (isRom) roms.add((system: system, title: _stem(original), path: destination.path));
       }
@@ -272,8 +276,8 @@ class _RetroBoxHomeState extends State<RetroBoxHome> {
           system: rom.system,
           title: rom.title,
           romPath: rom.path,
-          coverPath: findCover(rom.title, rom.system),
-          cheatPath: findCheat(rom.title, rom.system),
+          coverPath: findCover(rom.title, rom.system) ?? _oldGame(rom.system, rom.title)?.coverPath,
+          cheatPath: findCheat(rom.title, rom.system) ?? _oldGame(rom.system, rom.title)?.cheatPath,
         ));
       }
       updated.sort((a, b) {
@@ -291,34 +295,24 @@ class _RetroBoxHomeState extends State<RetroBoxHome> {
     }
   }
 
+  GameEntry? _oldGame(String system, String title) {
+    for (final game in _games) { if (game.system == system && game.title.toLowerCase() == title.toLowerCase()) return game; }
+    return null;
+  }
+
+  String? _coreSystemFor(String path) {
+    final byFolder = _systemFor(path);
+    if (byFolder != null) return byFolder;
+    if (path.contains('stella')) return 'Atari 2600';
+    if (path.contains('fceumm') || path.contains('nestopia')) return 'NES';
+    if (path.contains('snes') || path.contains('bsnes')) return 'SNES';
+    if (path.contains('blastem') || path.contains('genesis')) return 'Sega Genesis';
+    if (path.contains('mame') || path.contains('fbneo')) return 'Arcade';
+    return null;
+  }
+
   @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('RetroBox'), centerTitle: true, actions: [
-          IconButton(tooltip: 'Motores e imagen', onPressed: _engineSettings, icon: const Icon(Icons.settings)),
-          IconButton(tooltip: 'Importar ROM', onPressed: _busy ? null : _importRom, icon: const Icon(Icons.add)),
-          IconButton(tooltip: 'Import ZIP', onPressed: _busy ? null : _importZip, icon: const Icon(Icons.folder_zip_outlined)),
-        ]),
-        body: ListView(padding: const EdgeInsets.all(18), children: [
-          const Text('Your retro consoles', style: TextStyle(fontSize: 27, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          const Text('Choose a console to view its game library.', style: TextStyle(color: Colors.white70)),
-          const SizedBox(height: 18),
-          FilledButton.icon(onPressed: _busy ? null : _importRom, icon: const Icon(Icons.add), label: const Text('Importar un juego')),
-          FilledButton.icon(onPressed: _busy ? null : _importZip, icon: const Icon(Icons.file_upload_outlined), label: Text(_busy ? 'Importing...' : 'Import games ZIP')),
-          if (_message != null) Padding(padding: const EdgeInsets.symmetric(vertical: 10), child: Text(_message!, style: const TextStyle(color: Colors.white70))),
-          const SizedBox(height: 10),
-          ..._systems.entries.map((entry) => Card(
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
-                  leading: Icon(entry.value.icon, color: const Color(0xFF65B4FF), size: 32),
-                  title: Text(entry.key, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text('${entry.value.subtitle} · ${_games.where((g) => g.system == entry.key).length} games'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => GameLibraryScreen(system: entry.key, games: _games.where((g) => g.system == entry.key).toList()))),
-                ),
-              )),
-        ]),
-      );
+  Widget build(BuildContext context) => _androidHome();
 }
 
 class GameLibraryScreen extends StatelessWidget {

@@ -23,7 +23,7 @@ jobs:
           flutter analyze --no-fatal-infos --no-fatal-warnings
       - name: Test launch configuration
         working-directory: app
-        run: flutter test test/retroarch_launch_test.dart
+        run: flutter test test/retroarch_launch_test.dart test/android_home_test.dart
       - name: Build frontend
         working-directory: app
         run: flutter build windows --release
@@ -52,6 +52,13 @@ jobs:
             7z e cores.7z "-o$engine/cores" $core -r -y | Out-Null
             if ($LASTEXITCODE -or !(Test-Path "$engine/cores/$core")) { throw "Missing core $core" }
           }
+          Copy-Item app/CORE-LICENSE-INVENTORY.txt "$release/CORE-LICENSE-INVENTORY.txt"
+          curl.exe -fL --retry 3 https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-2.32.10-win32-x64.zip -o sdl.zip
+          if ($LASTEXITCODE) { throw 'SDL2 download failed' }
+          7z e sdl.zip "-o$release" SDL2.dll -r -y | Out-Null
+          if (!(Test-Path "$release/SDL2.dll")) { throw 'Missing frontend SDL2 runtime' }
+          curl.exe -fL --retry 3 https://raw.githubusercontent.com/libsdl-org/SDL/release-2.32.10/LICENSE.txt -o "$release/SDL2-LICENSE.txt"
+          if ($LASTEXITCODE) { throw 'SDL2 license download failed' }
           Copy-Item app/RETROARCH_INTEGRATION.md "$release/LEEME-PRUEBA.md"
           Get-ChildItem $engine -Recurse -File | Get-FileHash -Algorithm SHA256 | Format-Table -AutoSize | Out-File "$release/ENGINE-HASHES.txt"
           $bytes = (Get-ChildItem $release -Recurse -File | Measure-Object Length -Sum).Sum
@@ -73,17 +80,20 @@ jobs:
         shell: pwsh
         run: |
           @'
-          import ctypes, pathlib
+          import ctypes, pathlib, json
           root = pathlib.Path("app/build/windows/x64/runner/Release/engine")
           class Info(ctypes.Structure):
               _fields_ = [("name", ctypes.c_char_p), ("version", ctypes.c_char_p), ("extensions", ctypes.c_char_p), ("fullpath", ctypes.c_bool), ("block_extract", ctypes.c_bool)]
+          identities = {}
           for path in sorted((root / "cores").glob("*.dll")):
               core = ctypes.CDLL(str(path.resolve()))
               info = Info()
               core.retro_get_system_info.argtypes = [ctypes.POINTER(Info)]
               core.retro_get_system_info(ctypes.byref(info))
               assert info.name and info.version, path
+              identities[path.name] = info.name.decode()
               print(path.name, info.name.decode(), info.version.decode())
+          (root / "CORE_IDENTITIES.json").write_text(json.dumps(identities), encoding="utf-8")
           '@ | Set-Content validate.py
           python validate.py
           if ($LASTEXITCODE) { throw 'Native core validation failed' }
