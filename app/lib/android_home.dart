@@ -39,23 +39,57 @@ extension AndroidHome on _RetroBoxHomeState {
   void _changeSystem(int index) => setState(() { _current = index; _selected = 0; });
 
   Future<void> _play(GameEntry game) async {
-    _playing = true;
     MenuMusic.stop();
     try {
-      var useCheats = false;
+      String? selectedCheats;
       if (game.cheatPath != null) {
-        useCheats = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
+        final useCheats = await showDialog<bool>(context: context, builder: (context) => AlertDialog(
           title: Text(game.title), content: Text(tr('Use cheats?', '¿Usar trucos?')),
           actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr('NO', 'NO'))),
             TextButton(onPressed: () => Navigator.pop(context, true), child: Text(tr('YES', 'SÍ')))],
         )) ?? false;
+        if (useCheats) selectedCheats = await _selectCheats(game);
       }
       if (!mounted) return;
+      _playing = true;
       await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => RetroArchPlayer(
         title: game.title, romPath: game.romPath, system: game.system,
-        cheatPath: useCheats ? game.cheatPath : null, spanish: _spanish,
+        cheatPath: selectedCheats, spanish: _spanish,
       )));
     } finally { _playing = false; if (_music) MenuMusic.play(); }
+  }
+
+  Future<String?> _selectCheats(GameEntry game) async {
+    final source = File(game.cheatPath!);
+    if (!source.path.toLowerCase().endsWith('.cht')) {
+      if (mounted) await showDialog<void>(context: context,builder: (context) => AlertDialog(
+        title: Text(tr('Cheat format','Formato de trucos')),
+        content: Text(tr('This core uses RetroArch .cht files. The imported file is preserved. The game will start without cheats.','Este core usa archivos .cht de RetroArch. El archivo importado se conserva. El juego comenzará sin trucos.')),
+        actions: [TextButton(onPressed: () => Navigator.pop(context),child: const Text('OK'))],
+      ));
+      return null;
+    }
+    var text = await source.readAsString();
+    final count = int.tryParse(RegExp(r'(?m)^cheats\s*=\s*"?(\d+)').firstMatch(text)?.group(1) ?? '') ?? 0;
+    if (count < 1 || count > 1000) return null;
+    final enabled = List<bool>.filled(count,false);
+    final names = List<String>.generate(count,(i) => RegExp('(?m)^cheat${i}_desc\\s*=\\s*"([^"\\r\\n]*)"').firstMatch(text)?.group(1) ?? '${tr('Cheat','Truco')} ${i+1}');
+    if (!mounted) return null;
+    final apply = await showDialog<bool>(context: context,builder: (context) => StatefulBuilder(builder: (context,update) => AlertDialog(
+      title: Text(tr('Choose cheats','Elige los trucos')),
+      content: SizedBox(width: 520,height: 300,child: ListView.builder(itemCount: count,itemBuilder: (_,i) => CheckboxListTile(title: Text(names[i]),value: enabled[i],onChanged: (value) => update(() => enabled[i] = value ?? false)))),
+      actions: [TextButton(onPressed: () => Navigator.pop(context,false),child: Text(tr('CANCEL','CANCELAR'))),TextButton(onPressed: () => Navigator.pop(context,true),child: Text(tr('PLAY','JUGAR')))],
+    )));
+    if (apply != true) return null;
+    for (var i = 0; i < count; i++) {
+      final pattern = RegExp('(?m)^cheat${i}_enable\\s*=.*');
+      final value = 'cheat${i}_enable = ${enabled[i]}';
+      text = pattern.hasMatch(text) ? text.replaceAll(pattern,value) : '$text\n$value';
+    }
+    final root = await _libraryDir();
+    final file = File('${root.path}/selected-cheats.cht');
+    await file.writeAsString(text,flush:true);
+    return file.path;
   }
 
   Future<void> _sourcePicker() async {
@@ -202,7 +236,7 @@ extension AndroidHome on _RetroBoxHomeState {
                 selected: _inGames && _selected == index, onFocus: () => setState(() { _selected = index; _inGames = true; }),
                 onPressed: () => _play(games[index]),
                 child: Column(children: [Expanded(child: _cover(games[index])), const SizedBox(height: 3), SizedBox(height: 48, child: Center(child: Text(games[index].title, maxLines: 2, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold))))]),
-              )))),
+              ))),
             );
           })),
           if (_message != null) Container(color: Colors.black87, padding: const EdgeInsets.all(5), child: Text(_message!, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12))),

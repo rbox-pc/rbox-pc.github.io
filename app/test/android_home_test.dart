@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:ui' as ui;
+import 'package:flutter/rendering.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
@@ -27,13 +29,22 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
-      await tester.pumpWidget(const RetroBoxApp());
+      final boundary = GlobalKey();
+      await tester.pumpWidget(RepaintBoundary(key: boundary, child: const RetroBoxApp()));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       for (final name in ['Atari 2600','NES','SNES','Sega Genesis','Arcade']) {
         expect(find.text(name), findsOneWidget);
       }
       expect(find.text('＋  AGREGAR JUEGOS'),findsOneWidget);
+      await tester.runAsync(() async {
+        final image = await (boundary.currentContext!.findRenderObject() as RenderRepaintBoundary).toImage();
+        final data = await image.toByteData(format: ui.ImageByteFormat.png);
+        final folder = Directory('build/ui-preview');
+        await folder.create(recursive:true);
+        await File('${folder.path}/home-${size.width.toInt()}.png').writeAsBytes(data!.buffer.asUint8List());
+        image.dispose();
+      });
       expect(find.textContaining('Licencia'),findsNothing);
       await tester.tap(find.text('⚙  AJUSTES'));
       await tester.pumpAndSettle();

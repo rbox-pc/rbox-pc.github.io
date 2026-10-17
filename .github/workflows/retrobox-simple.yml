@@ -24,6 +24,14 @@ jobs:
       - name: Test launch configuration
         working-directory: app
         run: flutter test test/retroarch_launch_test.dart test/android_home_test.dart
+      - name: Upload rendered UI previews
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: RetroBox-Android-UI-Previews
+          path: app/build/ui-preview/
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Build frontend
         working-directory: app
         run: flutter build windows --release
@@ -97,6 +105,12 @@ jobs:
           '@ | Set-Content validate.py
           python validate.py
           if ($LASTEXITCODE) { throw 'Native core validation failed' }
+      - name: Report complete package size
+        shell: pwsh
+        run: |
+          $release = 'app/build/windows/x64/runner/Release'
+          $bytes = (Get-ChildItem $release -Recurse -File | Measure-Object Length -Sum).Sum
+          "Uncompressed bytes: $bytes" | Tee-Object -FilePath "$release/PACKAGE-SIZE.txt"
       - uses: actions/upload-artifact@v4
         with:
           name: RetroBox-Simple-Windows-PRUEBA-NO-COMERCIAL
