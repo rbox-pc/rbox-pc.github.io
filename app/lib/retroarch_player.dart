@@ -196,12 +196,30 @@ class _RetroArchPlayerState extends State<RetroArchPlayer> {
       await Directory('${root.path}/states/${widget.system}').create(recursive: true);
       await config.writeAsString(values.entries.map((e) => '${e.key} = ${e.value}').join('\n'), flush: true);
       final log = File('${root.path}/logs/last-session.log').openWrite();
+      final diagnostics = File('${root.path}/logs/engine-diagnostic.jsonl');
+      Future<void> record(String phase, Map<String, Object?> details) async {
+        try {
+          await diagnostics.writeAsString(
+            '${jsonEncode({'time': DateTime.now().toIso8601String(), 'phase': phase, ...details})}\n',
+            mode: FileMode.append, flush: true,
+          );
+        } catch (_) {}
+      }
+      final coreBytes = await core.length();
+      final romBytes = await File(widget.romPath).length();
+      await record('launch', {
+        'system': widget.system, 'game': widget.title,
+        'engineExists': await engine.exists(), 'coreExists': await core.exists(),
+        'coreBytes': coreBytes, 'romBytes': romBytes,
+        'configExists': await config.exists(),
+      });
       _log = log;
       _windows.captureLibrary();
       final process = await Process.start(engine.path,
           ['--verbose', '--config', config.path, '-L', core.path, widget.romPath],
           workingDirectory: engine.parent.path);
       _process = process;
+      await record('process_started', {'pid': process.pid});
       Timer(const Duration(seconds: 2), () { if (_process == process) _windows.findGame(process.pid); });
       final output = process.stdout.listen(log.add).asFuture<void>();
       final errors = process.stderr.listen(log.add).asFuture<void>();
@@ -213,7 +231,12 @@ class _RetroArchPlayerState extends State<RetroArchPlayer> {
         if (resume && ready.isCompleted && _process == process) await _command('LOAD_STATE');
       }());
       if (mounted) setState(() { _running = true; _starting = false; _status = 'Jugando. Select + abajo abre el menú de salida.'; });
+      final startedAt = DateTime.now();
       final code = await process.exitCode;
+      await record('process_exit', {
+        'exitCode': code, 'exitCodeHex': '0x${code.toUnsigned(32).toRadixString(16)}',
+        'terminatedAt': DateTime.now().toIso8601String(),
+      });
       await output;
       await errors;
       await log.flush();
@@ -224,7 +247,14 @@ class _RetroArchPlayerState extends State<RetroArchPlayer> {
       if (!mounted) return;
       setState(() { _running = false; _status = code == 0 ? 'Partida cerrada. Puedes elegir otro juego.' : 'El motor terminó con código $code. Registro: ${root.path}/logs/last-session.log'; });
       if (code == 0) Navigator.of(context).pop();
-    } catch (error) {
+    } catch (error, stack) {
+      try {
+        final root = await _root();
+        await File('${root.path}/logs/engine-exceptions.log').writeAsString(
+          '${DateTime.now().toIso8601String()} $error\n$stack\n',
+          mode: FileMode.append, flush: true,
+        );
+      } catch (_) {}
       if (_process == null) {
         _commands?.close(); _commands = null;
         await _log?.close();
