@@ -46,7 +46,11 @@ void main() {
         image.dispose();
       });
       expect(find.textContaining('Licencia'),findsNothing);
-      await tester.tap(find.text('⚙  AJUSTES'));
+      await tester.runAsync(() async {
+        await tester.tap(find.text('⚙  AJUSTES'));
+        // File-backed preferences finish in the real async zone before animation pumps.
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      });
       await tester.pumpAndSettle();
       expect(find.text('Música'), findsOneWidget);
       expect(find.text('Administrar partidas guardadas'),findsOneWidget);
