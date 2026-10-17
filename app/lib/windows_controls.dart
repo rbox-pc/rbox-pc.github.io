@@ -55,8 +55,18 @@ class WindowsControls {
       }
     }
     final button = sdl.lookupFunction<Uint8 Function(Pointer<Void>, Int32), int Function(Pointer<Void>, int)>('SDL_GameControllerGetButton');
+    final axis = sdl.lookupFunction<Int16 Function(Pointer<Void>, Int32), int Function(Pointer<Void>, int)>('SDL_GameControllerGetAxis');
+    const deadZone = 16000;
     for (final entry in _controllers.entries) {
       final down = <int>{for (var b = 0; b < 15; b++) if (button(entry.value, b) != 0) b};
+      // SDL_GameController axes: 0 = left X, 1 = left Y.
+      // Treat the analog stick like the D-pad in RetroBox menus.
+      final x = axis(entry.value, 0);
+      final y = axis(entry.value, 1);
+      if (x < -deadZone) down.add(13);
+      if (x > deadZone) down.add(14);
+      if (y < -deadZone) down.add(11);
+      if (y > deadZone) down.add(12);
       final previous = _previous[entry.key] ?? <int>{};
       for (final b in down.difference(previous)) {
         events.add(PadEvent(entry.key, b, down));
