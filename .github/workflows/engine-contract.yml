@@ -1,0 +1,31 @@
+name: RetroBox engine save contract
+on:
+  push:
+    branches: [retrobox-retroarch]
+    paths: ['app/test/retroarch_process_smoke.py', '.github/workflows/engine-contract.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  engine:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare original engine and NES core
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          curl.exe -fL --retry 3 https://buildbot.libretro.com/stable/1.22.2/windows/x86_64/RetroArch.7z -o engine.7z
+          if ($LASTEXITCODE) { throw 'Engine download failed' }
+          curl.exe -fL --retry 3 https://buildbot.libretro.com/stable/1.22.2/windows/x86_64/RetroArch_cores.7z -o cores.7z
+          if ($LASTEXITCODE) { throw 'Core download failed' }
+          7z x engine.7z -oengine -y | Out-Null
+          if ($LASTEXITCODE) { throw 'Engine extraction failed' }
+          $exe = @(Get-ChildItem engine -Recurse -Filter retroarch.exe)
+          if ($exe.Count -ne 1) { throw 'Expected one engine' }
+          New-Item -ItemType Directory -Force "$($exe[0].Directory.FullName)/cores" | Out-Null
+          7z e cores.7z "-o$($exe[0].Directory.FullName)/cores" fceumm_libretro.dll -r -y | Out-Null
+          if ($LASTEXITCODE) { throw 'Core extraction failed' }
+          python app/test/retroarch_process_smoke.py $exe[0].FullName
+          if ($LASTEXITCODE) { throw 'Engine save contract failed' }

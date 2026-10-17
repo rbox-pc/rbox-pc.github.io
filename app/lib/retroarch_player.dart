@@ -119,7 +119,7 @@ class _RetroArchPlayerState extends State<RetroArchPlayer> {
       final dot = filename.lastIndexOf('.');
       final stem = dot > 0 ? filename.substring(0,dot) : filename;
       final statePath = '${root.path}/states/${widget.system}/$stem.state';
-      _autoState = File('$statePath.auto');
+      _autoState = File(statePath);
       var resume = false;
       if (await _autoState!.exists() && mounted) {
         resume = await showDialog<bool>(context: context,builder: (context) => AlertDialog(
@@ -147,6 +147,13 @@ class _RetroArchPlayerState extends State<RetroArchPlayer> {
       _commandPort = reservation.port;
       reservation.close();
       _commands = await RawDatagramSocket.bind(InternetAddress.loopbackIPv4,0);
+      final ready = Completer<void>();
+      _commands!.listen((event) {
+        if (event == RawSocketEvent.read) {
+          final data = _commands?.receive();
+          if (data != null && utf8.decode(data.data,allowMalformed:true).contains('PLAYING') && !ready.isCompleted) ready.complete();
+        }
+      });
       final config = File('${root.path}/session.cfg');
       final values = <String, String>{
         'config_save_on_exit': 'false',
@@ -173,9 +180,10 @@ class _RetroArchPlayerState extends State<RetroArchPlayer> {
         'system_directory': configValue('${root.path}/bios'),
         'joypad_autoconfig_dir': configValue('${engine.parent.path}/autoconfig'),
         'autosave_interval': '10',
-        'state_slot': '-1',
+        'state_slot': '0',
         'savestate_auto_save': 'false',
-        'savestate_auto_load': resume.toString(),
+        'savestate_auto_load': 'false',
+        'savestate_auto_index': 'false',
         'savestate_file_compression': 'true',
         'sort_savestates_enable': 'false',
         'sort_savefiles_enable': 'false',
@@ -191,12 +199,19 @@ class _RetroArchPlayerState extends State<RetroArchPlayer> {
       _log = log;
       _windows.captureLibrary();
       final process = await Process.start(engine.path,
-          ['--verbose', '--config', config.path, '-S', statePath, '-L', core.path, widget.romPath],
+          ['--verbose', '--config', config.path, '-L', core.path, widget.romPath],
           workingDirectory: engine.parent.path);
       _process = process;
       Timer(const Duration(seconds: 2), () { if (_process == process) _windows.findGame(process.pid); });
       final output = process.stdout.listen(log.add).asFuture<void>();
       final errors = process.stderr.listen(log.add).asFuture<void>();
+      unawaited(() async {
+        for (var i = 0; i < 150 && _process == process && !ready.isCompleted; i++) {
+          await _command('GET_STATUS');
+          await Future<void>.delayed(const Duration(milliseconds:100));
+        }
+        if (resume && ready.isCompleted && _process == process) await _command('LOAD_STATE');
+      }());
       if (mounted) setState(() { _running = true; _starting = false; _status = 'Jugando. Select + abajo abre el menú de salida.'; });
       final code = await process.exitCode;
       await output;

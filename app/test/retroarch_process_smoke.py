@@ -1,7 +1,7 @@
 """Run the packaged engine, not a substitute, with an original diagnostic NES ROM.
 
 The ROM only sets a blue background and loops. It contains no third-party game
-data. This checks loading, loopback SAVE_STATE/QUIT and the exact .state.auto path;
+data. This checks loading, loopback SAVE_STATE/QUIT and the exact .state path;
 it does not establish that a commercial game, controller or audio works.
 """
 import pathlib
@@ -46,7 +46,7 @@ def run(engine: pathlib.Path) -> None:
             f'savefile_directory = "{(root / "saves").as_posix()}"\n'
             'sort_savestates_enable = false\nsort_savefiles_enable = false\n'
             'sort_savestates_by_content_enable = false\nsort_savefiles_by_content_enable = false\n'
-            'state_slot = -1\nsavestate_auto_save = false\n'
+            'state_slot = 0\nsavestate_auto_index = false\nsavestate_auto_save = false\n'
             'savestate_auto_load = false\nconfig_save_on_exit = false\n'
             'menu_driver = "rgui"\nui_companion_start_on_boot = false\n',
             encoding="utf-8",
@@ -54,13 +54,13 @@ def run(engine: pathlib.Path) -> None:
         log = root / "smoke.log"
         with log.open("wb") as output:
             process = subprocess.Popen(
-                [str(engine), "--verbose", "--config", str(config), "-S", str(state),
+                [str(engine), "--verbose", "--config", str(config),
                  "-L", str(engine.parent / "cores/fceumm_libretro.dll"), str(rom)],
                 cwd=engine.parent, stdin=subprocess.PIPE, stdout=output, stderr=output,
             )
             try:
                 deadline = time.monotonic() + 30
-                expected = pathlib.Path(str(state) + ".auto")
+                expected = state
                 while time.monotonic() < deadline:
                     if process.poll() is not None:
                         raise RuntimeError(f"Engine exited before saving: {process.returncode}")
@@ -69,7 +69,7 @@ def run(engine: pathlib.Path) -> None:
                     if expected.exists() and expected.stat().st_size > 0:
                         break
                 else:
-                    raise RuntimeError("SAVE_STATE did not produce diagnostic.state.auto")
+                    raise RuntimeError("SAVE_STATE did not produce diagnostic.state")
                 commands.sendto(b'QUIT',('127.0.0.1',port))
                 result = process.wait(timeout=15)
                 if result != 0:
