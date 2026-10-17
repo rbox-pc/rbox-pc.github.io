@@ -160,10 +160,31 @@ extension AndroidHome on _RetroBoxHomeState {
   // Controller menu zones: 0 = top actions, 1 = systems, 2 = games.
   int _controllerZone = 1;
   int _topAction = 0;
+  IOSink? _navigationLog;
+
+  Future<void> _writeNavigationDiagnostic(String line) async {
+    try {
+      final documents = await getApplicationDocumentsDirectory();
+      final folder = Directory('${documents.path}/RetroBoxLibrary/logs');
+      await folder.create(recursive: true);
+      await File('${folder.path}/navigation-diagnostic.log').writeAsString(
+        '${DateTime.now().toIso8601String()} $line\n',
+        mode: FileMode.append,
+        flush: true,
+      );
+    } catch (_) { /* Logging must not interrupt controller input. */ }
+  }
 
   void _pad(PadEvent event) {
     if (!mounted || _playing) return;
     final button = event.button;
+    final before = 'zone=$_controllerZone action=$_topAction system=$_current game=$_selected inGames=$_inGames';
+    void trace(String outcome) {
+      unawaited(_writeNavigationDiagnostic(
+        'controller=${event.controller} button=$button before=[$before] '
+        'after=[zone=$_controllerZone action=$_topAction system=$_current game=$_selected inGames=$_inGames] outcome=$outcome',
+      ));
+    }
     if (ModalRoute.of(context)?.isCurrent != true) {
       final focus = FocusManager.instance.primaryFocus;
       if (button == 11 || button == 13) focus?.previousFocus();
@@ -171,6 +192,7 @@ extension AndroidHome on _RetroBoxHomeState {
       if ([0, 6].contains(button) && focus?.context != null) {
         Actions.maybeInvoke(focus!.context!, const ActivateIntent());
       }
+      trace('dialog-focus');
       return;
     }
     if (button == 11) {
@@ -178,6 +200,7 @@ extension AndroidHome on _RetroBoxHomeState {
         if (_controllerZone > 0) _controllerZone--;
         _inGames = _controllerZone == 2;
       });
+      trace('up');
       return;
     }
     if (button == 12) {
@@ -185,6 +208,7 @@ extension AndroidHome on _RetroBoxHomeState {
         if (_controllerZone < 2) _controllerZone++;
         _inGames = _controllerZone == 2;
       });
+      trace('down');
       return;
     }
     if (button == 13 || button == 14) {
@@ -203,6 +227,7 @@ extension AndroidHome on _RetroBoxHomeState {
           );
         }
       }
+      trace('horizontal');
       return;
     }
     if ([0, 6].contains(button) && !_busy) {
@@ -217,6 +242,7 @@ extension AndroidHome on _RetroBoxHomeState {
       } else if (currentGames.isNotEmpty) {
         _play(currentGames[_selected.clamp(0, currentGames.length - 1)]);
       }
+      trace('activate');
     }
   }
 
