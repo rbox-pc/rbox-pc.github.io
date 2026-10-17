@@ -185,8 +185,8 @@ extension AndroidHome on _RetroBoxHomeState {
   Widget _cover(GameEntry game) {
     final cover = game.coverPath;
     return cover != null && File(cover).existsSync()
-      ? Image.file(File(cover), fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.videogame_asset, size: 60, color: _accent))
-      : const Icon(Icons.videogame_asset, size: 60, color: _accent);
+      ? Image.file(File(cover), fit: BoxFit.contain, errorBuilder: (_, __, ___) => Image.asset('assets/android/ic_launcher.png',fit: BoxFit.contain))
+      : Image.asset('assets/android/ic_launcher.png',fit: BoxFit.contain);
   }
 
   Future<void> _exitApp() async {
