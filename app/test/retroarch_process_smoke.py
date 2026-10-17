@@ -47,7 +47,7 @@ def run(engine: pathlib.Path) -> None:
             'sort_savestates_enable = false\nsort_savefiles_enable = false\n'
             'sort_savestates_by_content_enable = false\nsort_savefiles_by_content_enable = false\n'
             'state_slot = 0\nsavestate_auto_index = false\nsavestate_auto_save = false\n'
-            'savestate_auto_load = false\nconfig_save_on_exit = false\n'
+            'savestate_auto_load = false\nconfig_save_on_exit = false\nquit_press_twice = false\n'
             'menu_driver = "rgui"\nui_companion_start_on_boot = false\n',
             encoding="utf-8",
         )
